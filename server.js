@@ -1,6 +1,6 @@
 // POKER • Full Server (Express + WebSocket + better-sqlite3)
 // ============================================================================
-// SVE RUTE za admin i index + WS seat guard + brisanje slika koje počinju s '0'
+// SVE RUTE (index + admin) + WS seat guard + cleanup '0*' slika u /public
 // ============================================================================
 
 const express = require("express");
@@ -18,9 +18,10 @@ const { parse: parseCookie } = require("cookie");
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const ENV = process.env.NODE_ENV || "development";
+
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-in-prod";
 const TOKEN_NAME = "token";
-const ADMIN_KEY = process.env.ADMIN_KEY || "set-me";
+const ADMIN_KEY = process.env.ADMIN_KEY || "set-admin-key";
 
 // Poker defaults
 const TURN_TIMER_S = parseInt(process.env.TURN_TIMER_S || "15", 10);
@@ -31,7 +32,7 @@ const DEFAULT_RAKE_CAP_S = parseInt(process.env.RAKE_CAP_S || "300", 10); // 3g 
 // Paths
 const ROOT = __dirname;
 const PUB = path.join(ROOT, "public");
-const IMG_ROOT = path.join(PUB, "images");
+const IMG_ROOT = PUB; // slike su direktno u /public
 
 // DB file
 const DB_FILE = process.env.DB_PATH || path.join(ROOT, "data", "poker.db");
@@ -80,8 +81,6 @@ function requireAuth(req){
   if (!u || u.is_disabled) throw new Error("Account disabled");
   return tok.uid;
 }
-
-// ADMIN guard
 function requireAdminKey(req, res, next){
   const key = req.headers["x-admin-key"];
   if (!key || key !== ADMIN_KEY) return res.status(401).json({ ok:false, error:"Admin key required" });
@@ -90,7 +89,6 @@ function requireAdminKey(req, res, next){
 
 // ----------------- MIGRATIONS -----------------
 function ensure(sql){ db.exec(sql); }
-// users / tables / seats / hands / actions / pots / payouts / buyins (kao ranije)
 ensure(`
 CREATE TABLE IF NOT EXISTS users(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,8 +179,6 @@ CREATE TABLE IF NOT EXISTS poker_buyins(
   type TEXT NOT NULL, -- buyin|rebuy|cashout
   created_at TEXT NOT NULL
 );`);
-
-/* === Admin features needed by admin UI === */
 ensure(`
 CREATE TABLE IF NOT EXISTS admin_bonus_codes(
   slot INTEGER PRIMARY KEY CHECK(slot BETWEEN 1 AND 5),
@@ -195,7 +191,6 @@ CREATE TABLE IF NOT EXISTS admin_meta(
   key TEXT PRIMARY KEY,
   val TEXT NOT NULL
 );`);
-// Optional inventory tables (keep empty, UI will show "(none)")
 ensure(`
 CREATE TABLE IF NOT EXISTS user_items(
   user_id INTEGER NOT NULL,
@@ -211,7 +206,7 @@ CREATE TABLE IF NOT EXISTS user_recipes(
   qty INTEGER NOT NULL DEFAULT 1
 );`);
 
-// Seed jedan stol & seats
+// Seed jedan stol & seats (9-max 1/2)
 (function seedTable(){
   const any = db.prepare("SELECT id FROM poker_tables LIMIT 1").get();
   if (!any){
@@ -245,7 +240,6 @@ function deleteZeroPrefixedImages(dir) {
     }
   }catch{}
 }
-// run at startup
 deleteZeroPrefixedImages(IMG_ROOT);
 
 // ----------------- GAME (deck/evaluator/engine) -----------------
@@ -254,7 +248,6 @@ const RANKS = ["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
 const RVAL = Object.fromEntries(RANKS.map((r,i)=>[r, 14 - i]));
 function deck52(){ const d=[]; for (const s of SUITS) for (const r of RANKS) d.push(r+s); return d; }
 function shuffle(a){ for (let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function parseBoard(str){ return str ? str.split(",").filter(Boolean) : []; }
 function* combos5(arr){ const n=arr.length; for(let a=0;a<n-4;a++)for(let b=a+1;b<n-3;b++)for(let c=b+1;c<n-2;c++)for(let d=c+1;d<n-1;d++)for(let e=d+1;e<n;e++)yield [arr[a],arr[b],arr[c],arr[d],arr[e]]; }
 function handRank5(cards){
   const r=cards.map(c=>c[0]); const s=cards.map(c=>c[1]);
@@ -278,7 +271,7 @@ function handRank5(cards){
   return [0, ...rv];
 }
 function cmpRank(a,b){ const L=Math.max(a.length,b.length); for(let i=0;i<L;i++){ const va=a[i]??0, vb=b[i]??0; if (va>vb) return 1; if (va<vb) return -1; } return 0; }
-function best5of7(seven){ let best=null, bestSel=null; for (const five of combos5(seven)){ const rank=handRank5(five); if (!best || cmpRank(rank,best)>0){ best=rank; bestSel=five; } } return { rank:best, best:bestSel }; }
+function best5of7(seven){ let best=null; for (const five of combos5(seven)){ const rank=handRank5(five); if (!best || cmpRank(rank,best)>0){ best=rank; } } return { rank:best }; }
 
 // Runtime
 const RT = new Map(); // tableId -> { ... }
@@ -365,7 +358,6 @@ function startIfCan(tableId){
   // BTN next
   db.prepare("UPDATE poker_tables SET btn_pos=? WHERE id=?").run(bb, tableId);
 
-  // first to act postflop = next after BB (UTG preflop)
   const first = nextOccupiedIndex(occ, bb, seatsCount);
   setActing(tableId, first);
   sendTableState(tableId);
@@ -375,7 +367,6 @@ function onTimeout(tableId){
   const rt = RT.get(tableId); if (!rt) return;
   const t = tableRow(tableId);
   const seat = db.prepare("SELECT * FROM poker_seats WHERE table_id=? AND seat_index=?").get(tableId, rt.toAct);
-  // Timebank
   const left = (rt.timers.timebank.get(seat.user_id)||t.timebank_s);
   if (left>0){
     const spend = Math.min(left, t.turn_timer_s);
@@ -445,7 +436,6 @@ function showdown(tableId){
   const pots = calcPots(tableId);
   const board = rt.board.slice();
 
-  // NOTE: demo: hole iz hand_actions "deal:RS,RS"; u produkciji čuvaj privatno per seat i šalji unicastom
   const holeBySeat = {};
   const dealRows = db.prepare("SELECT seat_index, action FROM hand_actions WHERE hand_id=? AND action LIKE 'deal:%'").all(rt.handId);
   if (dealRows.length===0){
@@ -630,7 +620,6 @@ app.get("/api/admin/users", requireAdminKey, (_req,res)=>{
   const users = rows.map(u=>({ id:u.id,email:u.email,is_admin:!!u.is_admin,is_disabled:!!u.is_disabled, gold:sToG(u.balance_silver), silver:u.balance_silver%100, created_at:u.created_at, last_seen:u.last_seen }));
   res.json({ ok:true, users });
 });
-
 app.post("/api/admin/adjust-balance", requireAdminKey, (req,res)=>{
   try{
     const { email, gold=0, silver=0, delta_silver } = req.body||{};
@@ -645,7 +634,6 @@ app.post("/api/admin/adjust-balance", requireAdminKey, (req,res)=>{
     res.json({ ok:true, balance_silver: after });
   }catch(e){ res.status(500).json({ ok:false, error:String(e.message||e) }); }
 });
-
 app.post("/api/admin/disable-user", requireAdminKey, (req,res)=>{
   const { email, disabled } = req.body||{};
   if (!isEmail(email)) return res.status(400).json({ ok:false, error:"Bad email" });
@@ -654,16 +642,12 @@ app.post("/api/admin/disable-user", requireAdminKey, (req,res)=>{
   db.prepare("UPDATE users SET is_disabled=? WHERE id=?").run(disabled?1:0, u.id);
   res.json({ ok:true });
 });
-
-// Inventory za admin UI (prazno dok ne uvedeš ekonomiju)
 app.get("/api/admin/user/:id/inventory", requireAdminKey, (req,res)=>{
   const uid = parseInt(req.params.id,10);
   const items   = db.prepare("SELECT name,tier,qty FROM user_items WHERE user_id=?").all(uid);
   const recipes = db.prepare("SELECT name,tier,qty FROM user_recipes WHERE user_id=?").all(uid);
   res.json({ ok:true, items, recipes });
 });
-
-// Bonus codes (5 slotova)
 app.get("/api/admin/bonus-codes", requireAdminKey, (_req,res)=>{
   const rows = db.prepare("SELECT slot,code,percent,total_credited_silver FROM admin_bonus_codes ORDER BY slot ASC").all();
   const map = new Map(rows.map(r=>[r.slot,r]));
@@ -689,16 +673,12 @@ app.post("/api/admin/bonus-codes", requireAdminKey, (req,res)=>{
     res.json({ ok:true, ...row });
   }catch(e){ res.status(400).json({ ok:false, error:String(e.message||e) }); }
 });
-
-// Artefact bonus gold
 app.post("/api/admin/set-bonus-gold", requireAdminKey, (req,res)=>{
   const bonus_gold = Math.max(0, parseInt(req.body?.bonus_gold||"0",10) || 0);
   db.prepare("INSERT INTO admin_meta(key,val) VALUES ('artefact_bonus_gold',?) ON CONFLICT(key) DO UPDATE SET val=excluded.val")
     .run(String(bonus_gold));
   res.json({ ok:true, bonus_gold });
 });
-
-// Admin util: ručno pokreni čišćenje '0*' slika
 app.post("/api/admin/cleanup-images", requireAdminKey, (_req,res)=>{
   deleteZeroPrefixedImages(IMG_ROOT);
   res.json({ ok:true, cleaned:true });
@@ -713,7 +693,6 @@ app.get("/api/poker/lobby", (_req,res)=>{
   `).all();
   res.json({ ok:true, tables: rows });
 });
-
 app.get("/api/poker/table/:id/state", (req,res)=>{
   const tid = parseInt(req.params.id,10);
   const t = db.prepare("SELECT * FROM poker_tables WHERE id=?").get(tid);
@@ -722,12 +701,10 @@ app.get("/api/poker/table/:id/state", (req,res)=>{
   const h = db.prepare("SELECT id,hand_no,state,btn_seat,sb_seat,bb_seat,board,started_at,ended_at FROM hands WHERE table_id=? ORDER BY id DESC LIMIT 1").get(tid);
   res.json({ ok:true, table:t, seats, hand:h||null });
 });
-
 function firstFreeSeat(tableId){
   const r = db.prepare("SELECT seat_index FROM poker_seats WHERE table_id=? AND (user_id IS NULL OR state='empty') ORDER BY seat_index ASC").get(tableId);
   return r ? r.seat_index : -1;
 }
-
 app.post("/api/poker/table/:id/join", (req,res)=>{
   try{
     const uid = requireAuth(req);
@@ -772,7 +749,6 @@ app.post("/api/poker/table/:id/join", (req,res)=>{
     startIfCan(table.id);
   }catch(e){ res.status(400).json({ ok:false, error:String(e.message||e) }); }
 });
-
 app.post("/api/poker/table/:id/rebuy", (req,res)=>{
   try{
     const uid=requireAuth(req);
@@ -807,7 +783,6 @@ app.post("/api/poker/table/:id/rebuy", (req,res)=>{
     sendTableState(table.id);
   }catch(e){ res.status(400).json({ ok:false, error:String(e.message||e) }); }
 });
-
 app.post("/api/poker/table/:id/sitout", (req,res)=>{
   try{
     const uid=requireAuth(req);
@@ -856,7 +831,7 @@ app.get("/metrics", (_req,res)=>{
   res.json({ ok:true, tables, hands, ts:Date.now() });
 });
 
-// ----------------- WEBSOCKET (with seat ownership guard) -----------------
+// ----------------- WEBSOCKET (seat ownership guard) -----------------
 function wsUserIdFromReq(req){
   try{
     const cookies = parseCookie(req.headers.cookie || "");
