@@ -2,20 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Poker Lobby</title>
 <link rel="stylesheet" href="/app.css">
 <style>
-body { background:#0b0d13; color:#e5e7eb; font-family:system-ui, sans-serif; }
-.wrap { max-width:600px; margin:0 auto; padding:20px; }
-h1 { text-align:center; margin-bottom:20px; }
-.table-list { display:flex; flex-direction:column; gap:10px; }
-.item { background:#111722; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #1f2937; }
-.btn { padding:6px 12px; border-radius:6px; background:#22d3ee; border:none; cursor:pointer; color:#000; font-weight:600; }
-.btn:hover { opacity:.9; }
-input, select { padding:6px; border-radius:6px; background:#111722; border:1px solid #334155; color:#e5e7eb; }
-#make-box { display:none; background:#0008; position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
-.modal { background:#111722; padding:20px; border-radius:12px; width:260px; border:1px solid #334155; display:flex; flex-direction:column; gap:12px; }
+  :root{ --bg:#0b0d13; --panel:#111722; --muted:#94a3b8; --br:#243041; --btn:#22d3ee; }
+  body{ margin:0; background:var(--bg); color:#e5e7eb; font:14px/1.4 system-ui,Segoe UI,Roboto,Arial,sans-serif; }
+  .wrap{ max-width:720px; margin:0 auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
+  h1{ text-align:center; margin:8px 0 14px; }
+  .card{ background:var(--panel); border:1px solid var(--br); border-radius:12px; padding:14px; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .col{ display:flex; flex-direction:column; gap:8px; }
+  input{ background:#0b1220; border:1px solid var(--br); border-radius:8px; padding:10px; color:#e5e7eb; min-width:220px; }
+  button{ background:var(--btn); color:#000; border:none; border-radius:8px; padding:10px 14px; font-weight:700; cursor:pointer; }
+  button.secondary{ background:#2b3445; color:#e5e7eb; }
+  button.danger{ background:#b91c1c; color:#fff; }
+  .muted{ color:var(--muted); }
+  .list{ display:flex; flex-direction:column; gap:8px; }
+  .item{ display:flex; justify-content:space-between; align-items:center; background:#0f1624; border:1px solid var(--br); border-radius:10px; padding:10px 12px; }
+  .center{ text-align:center; }
+  .hidden{ display:none !important; }
+  .right{ margin-left:auto; }
+  /* modal */
+  #make-box{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.5); }
+  .modal{ width:min(92vw,320px); background:#0f1624; border:1px solid var(--br); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  select{ background:#0b1220; border:1px solid var(--br); color:#e5e7eb; border-radius:8px; padding:10px; }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:560px){ .split{ grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -23,75 +36,196 @@ input, select { padding:6px; border-radius:6px; background:#111722; border:1px s
 <div class="wrap">
   <h1>POKER LOBBY</h1>
 
-  <button class="btn" id="btn-make">+ Napravi Sto</button>
+  <!-- AUTH PANEL -->
+  <section class="card" id="auth">
+    <div class="split">
+      <!-- Login -->
+      <div class="col">
+        <div class="muted" style="font-weight:700;">Login</div>
+        <input id="login-email" type="email" placeholder="email">
+        <input id="login-pass" type="password" placeholder="password (min 6)">
+        <div class="row">
+          <button id="btn-login">Login</button>
+          <button id="btn-logout" class="secondary">Logout</button>
+        </div>
+      </div>
+      <!-- Register -->
+      <div class="col">
+        <div class="muted" style="font-weight:700;">Registracija</div>
+        <input id="reg-email" type="email" placeholder="email">
+        <input id="reg-pass" type="password" placeholder="password (min 6)">
+        <button id="btn-register">Kreiraj račun</button>
+      </div>
+    </div>
+    <div id="auth-msg" class="muted" style="margin-top:6px;"></div>
+  </section>
 
-  <div class="table-list" id="list">Loading...</div>
+  <!-- WHO / ACTIONS -->
+  <section class="card hidden" id="who">
+    <div class="row" style="align-items:center;">
+      <div id="who-text" class="muted">—</div>
+      <button id="btn-open-make" class="right">+ Napravi Sto</button>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section class="card" id="lobby">
+    <div class="row" style="justify-content:space-between; align-items:center;">
+      <div class="muted">Dostupni stolovi</div>
+      <button id="btn-refresh" class="secondary">Osvježi</button>
+    </div>
+    <div id="list" class="list" style="margin-top:10px;">Loading…</div>
+  </section>
 </div>
 
-<!-- Modal za kreiranje stola -->
+<!-- MODAL: CREATE TABLE -->
 <div id="make-box">
   <div class="modal">
-    <label>Broj mjesta (2-9):</label>
+    <div class="muted" style="font-weight:700;">Kreiraj sto</div>
+    <label class="muted">Broj mjesta (2–9)</label>
     <select id="seats">
       <option>2</option><option>3</option><option>4</option><option>5</option>
-      <option>6</option><option>7</option><option>8</option><option>9</option>
+      <option>6</option><option>7</option><option>8</option><option selected>9</option>
     </select>
-    <button class="btn" id="create">Kreiraj</button>
-    <button class="btn" id="close-make" style="background:#444;color:#eee;">Zatvori</button>
+    <div class="row" style="margin-top:6px;">
+      <button id="btn-create">Kreiraj</button>
+      <button id="btn-close-make" class="secondary">Zatvori</button>
+    </div>
+    <div id="make-msg" class="muted"></div>
   </div>
 </div>
 
 <script>
-// --- Fetch & Render Lobby ---
-async function loadTables(){
-  const r = await fetch("/api/tables").then(r=>r.json());
-  if(!r.ok) return;
-  const box = document.getElementById("list");
-  box.innerHTML = "";
-  for(const t of r.tables){
-    const div = document.createElement("div");
-    div.className="item";
-    div.innerHTML = `
-      <div>Sto #${t.id} • ${t.players}/${t.seats} igrača</div>
-      <button class="btn" onclick="goTable(${t.id})">Join</button>
-    `;
-    box.appendChild(div);
+  // ------------- helpers -------------
+  const $ = s => document.querySelector(s);
+  function msg(sel, t, ok=true){ const e=$(sel); if(!e) return; e.textContent=t||""; e.style.color = ok ? "#9ba7b8" : "#fca5a5"; }
+
+  // ------------- auth -------------
+  async function me(){
+    try{
+      const r = await fetch("/api/me", { credentials:"include" }).then(r=>r.json());
+      if (r && r.ok && r.user){
+        $("#auth").classList.add("hidden");
+        $("#who").classList.remove("hidden");
+        $("#who-text").textContent = `${r.user.email} • balans: ${r.user.balance} čipova`;
+        return r.user;
+      }
+    }catch{}
+    $("#auth").classList.remove("hidden");
+    $("#who").classList.add("hidden");
+    $("#who-text").textContent = "—";
+    return null;
   }
-}
 
-function goTable(id){
-  location.href = "/table?id=" + id;
-}
+  async function doLogin(){
+    const email = $("#login-email").value.trim();
+    const password = $("#login-pass").value;
+    if (!email || !password) return msg("#auth-msg","Unesi email i lozinku.", false);
+    const r = await fetch("/api/login", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      credentials:"include",
+      body: JSON.stringify({ email, password })
+    }).then(r=>r.json());
+    if (r.ok){ msg("#auth-msg","Ulogiran.", true); await me(); await loadTables(); }
+    else msg("#auth-msg", r.error || "Greška", false);
+  }
 
-// --- Create Table ---
-document.getElementById("btn-make").onclick = ()=> {
-  document.getElementById("make-box").style.display="flex";
-};
-document.getElementById("close-make").onclick = ()=> {
-  document.getElementById("make-box").style.display="none";
-};
+  async function doRegister(){
+    const email = $("#reg-email").value.trim();
+    const password = $("#reg-pass").value;
+    if (!email || password.length<6) return msg("#auth-msg","Email i lozinka (min 6).", false);
+    const r = await fetch("/api/register", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ email, password })
+    }).then(r=>r.json());
+    if (r.ok){ msg("#auth-msg","Račun kreiran. Sada se ulogiraj.", true); }
+    else msg("#auth-msg", r.error || "Greška", false);
+  }
 
-document.getElementById("create").onclick = async ()=>{
-  const seats = document.getElementById("seats").value;
-  const r = await fetch("/api/table/create",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({seats:Number(seats)})
-  }).then(r=>r.json());
-  if(r.ok){
-    location.href="/table?id="+r.table_id;
-  }else alert(r.error||"Error");
-};
+  async function doLogout(){
+    await fetch("/api/logout", { credentials:"include" });
+    $("#auth").classList.remove("hidden");
+    $("#who").classList.add("hidden");
+    await loadTables();
+  }
 
-// --- WebSocket auto refresh ---
-const ws = new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host);
-ws.onmessage = msg=>{
-  const data = JSON.parse(msg.data);
-  if(data.type==="lobby") loadTables();
-};
+  $("#btn-login").onclick = doLogin;
+  $("#btn-register").onclick = doRegister;
+  $("#btn-logout").onclick = doLogout;
 
-// initial load
-loadTables();
+  // ------------- lobby -------------
+  function goTable(id){ location.href = "/table?id=" + id; }
+
+  async function loadTables(){
+    try{
+      const r = await fetch("/api/tables").then(r=>r.json());
+      if (!r.ok) throw new Error("HTTP");
+      const box = $("#list");
+      box.innerHTML = "";
+      if (!r.tables.length){
+        box.innerHTML = `<div class="center muted">Nema stolova. Napravi prvi.</div>`;
+      }
+      for (const t of r.tables){
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+          <div>Sto #${t.id} • ${t.players}/${t.seats} igrača</div>
+          <div class="row">
+            <button onclick="goTable(${t.id})">Join</button>
+          </div>
+        `;
+        box.appendChild(div);
+      }
+    }catch{
+      $("#list").textContent = "Greška pri učitavanju.";
+    }
+  }
+  $("#btn-refresh").onclick = loadTables;
+
+  // ------------- create table -------------
+  $("#btn-open-make").onclick = () => { $("#make-box").style.display="flex"; msg("#make-msg",""); };
+  $("#btn-close-make").onclick = () => { $("#make-box").style.display="none"; };
+
+  $("#btn-create").onclick = async ()=>{
+    const seats = Number($("#seats").value);
+    try{
+      const r = await fetch("/api/table/create", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        credentials:"include",
+        body: JSON.stringify({ seats })
+      }).then(r=>r.json());
+      if (r.ok){ location.href = "/table?id=" + r.table_id; return; }
+      msg("#make-msg", r.error || "Neuspjelo.", false);
+    }catch(e){
+      msg("#make-msg","Greška.", false);
+    }
+  };
+
+  // ------------- websocket auto refresh -------------
+  let ws;
+  function connectWS(){
+    try{
+      ws = new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host);
+      ws.onmessage = ev=>{
+        try{
+          const data = JSON.parse(ev.data);
+          if (data.type==="lobby") loadTables();
+        }catch{}
+      };
+      ws.onclose = ()=> setTimeout(connectWS, 1500);
+    }catch{}
+  }
+
+  // ------------- boot -------------
+  (async ()=>{
+    await me();
+    await loadTables();
+    connectWS();
+  })();
 </script>
+
 </body>
 </html>
