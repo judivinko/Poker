@@ -1,6 +1,6 @@
 {
   "name": "TexasHoldemBackend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "baseUrl": "/api",
   "auth": {
     "type": "cookieJWT",
@@ -82,9 +82,26 @@
       "amount_s": "number",
       "type": "string (buyin|rebuy|cashout)",
       "created_at": "iso-datetime"
+    },
+    "BonusCodeSlot": {
+      "slot": "number (1..5)",
+      "code": "string",
+      "percent": "number (0..100)",
+      "total_credited_silver": "number"
     }
   },
   "endpoints": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "response": { "ok": "boolean", "ts": "number" }
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "response": { "ok": "boolean", "tables": "number", "hands": "number", "ts": "number" }
+    },
+
     {
       "method": "POST",
       "path": "/register",
@@ -116,12 +133,14 @@
       "group": "Admin",
       "method": "GET",
       "path": "/admin/ping",
+      "headers": { "x-admin-key": "string" },
       "response": { "ok": "boolean" }
     },
     {
       "group": "Admin",
       "method": "GET",
       "path": "/admin/users",
+      "headers": { "x-admin-key": "string" },
       "response": {
         "ok": "boolean",
         "users": [
@@ -133,6 +152,7 @@
       "group": "Admin",
       "method": "POST",
       "path": "/admin/adjust-balance",
+      "headers": { "x-admin-key": "string" },
       "body": { "email":"string","gold":"number(optional)","silver":"number(optional)","delta_silver":"number(optional)" },
       "response": { "ok":"boolean","balance_silver":"number" }
     },
@@ -140,8 +160,42 @@
       "group": "Admin",
       "method": "POST",
       "path": "/admin/disable-user",
+      "headers": { "x-admin-key": "string" },
       "body": { "email":"string","disabled":"boolean" },
       "response": { "ok":"boolean" }
+    },
+    {
+      "group": "Admin",
+      "method": "GET",
+      "path": "/admin/bonus-codes",
+      "headers": { "x-admin-key": "string" },
+      "response": {
+        "ok": "boolean",
+        "slots": [ { "$ref": "BonusCodeSlot" } ]
+      }
+    },
+    {
+      "group": "Admin",
+      "method": "POST",
+      "path": "/admin/bonus-codes",
+      "headers": { "x-admin-key": "string" },
+      "body": { "slot":"number(1..5)","code":"string","percent":"number(0..100)" },
+      "response": { "ok":"boolean","slot":"number","code":"string","percent":"number","total_credited_silver":"number" }
+    },
+    {
+      "group": "Admin",
+      "method": "POST",
+      "path": "/admin/set-bonus-gold",
+      "headers": { "x-admin-key": "string" },
+      "body": { "bonus_gold":"number" },
+      "response": { "ok":"boolean","bonus_gold":"number" }
+    },
+    {
+      "group": "Admin",
+      "method": "POST",
+      "path": "/admin/cleanup-images",
+      "headers": { "x-admin-key": "string" },
+      "response": { "ok":"boolean","cleaned":"boolean" }
     },
 
     {
@@ -214,10 +268,7 @@
   "websocket": {
     "url": "ws(s)://{host}/",
     "clientMessages": [
-      {
-        "type": "ping",
-        "payload": {}
-      },
+      { "type": "ping", "payload": {} },
       {
         "type": "player_action",
         "payload": {
@@ -229,7 +280,7 @@
       }
     ],
     "serverMessages": [
-      { "type": "connection_open", "fields": { "ts":"number","env":"string" } },
+      { "type": "connection_open", "fields": { "ts":"number", "env":"string", "uid":"number|null" } },
       { "type": "pong", "fields": { "ts":"number" } },
       {
         "type": "lobby_update",
@@ -262,10 +313,7 @@
           "auto":"boolean|optional"
         }
       },
-      {
-        "type": "board_update",
-        "fields": { "table_id":"number", "board":"string[] of cards e.g. [\"AS\",\"KD\",\"QH\"]" }
-      },
+      { "type": "board_update", "fields": { "table_id":"number", "board":"string[]" } },
       {
         "type": "showdown",
         "fields": {
@@ -289,6 +337,10 @@
     "rake": "rake_pct% of total pots with cap rake_cap_s",
     "sidePots": "computed from total contributions; split supported",
     "startHand": "needs >=2 occupied players with stack>0"
-  }
+  },
+  "notes": [
+    "Svi Admin endpointi traže header 'x-admin-key' koji mora odgovarati ADMIN_KEY env varijabli na serveru.",
+    "Status 'paused' postoji u modelu, ali ga engine trenutno ne postavlja – predviđeno za buduće pauziranje stola.",
+    "board se šalje kao niz stringova u WS porukama; u REST /state je spremljen kao comma-separated u polju 'board'."
+  ]
 }
-
