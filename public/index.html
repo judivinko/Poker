@@ -1,563 +1,303 @@
 <!doctype html>
-<html lang="en">
+<html lang="hr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Poker • SPA</title>
-  <!-- Vanjski CSS koji smo već radili -->
-  <link rel="stylesheet" href="/css/game.css" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>POKER</title>
   <style>
-    /* Mini dodatci da sve radi odmah */
-    :root{--fg:#e5e7eb;--muted:#94a3b8;--bg:#0b0d13}
-    body{background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0}
-    .hidden{display:none!important}
-
-    /* Topbar */
-    .topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #202635;background:#0d1220;position:sticky;top:0;z-index:10}
-    .brand{font-weight:700;letter-spacing:.6px}
-    .right{display:flex;gap:10px;align-items:center}
-    .badge{font-size:12px;padding:2px 8px;border:1px solid #2a3246;border-radius:999px;color:#cbd5e1;background:#0b1220}
-    .btn{background:#1f2937;border:1px solid #374151;color:#e5e7eb;border-radius:10px;padding:8px 12px;cursor:pointer}
-    .btn.primary{background:#2563eb;border-color:#1d4ed8}
-    .btn.secondary{background:#111827;border-color:#253146}
-    .btn:disabled{opacity:.6;cursor:not-allowed}
-    .link{color:#93c5fd;cursor:pointer}
-
-    /* Layout sekcija */
-    .page{max-width:1000px;margin:0 auto;padding:16px}
-    .card{background:#0b1220;border:1px solid #233047;border-radius:12px;padding:14px;margin:12px 0}
-
-    /* Auth forms */
-    .tabs{display:flex;gap:8px;margin-bottom:10px}
-    .tabs .tab{padding:8px 12px;border-radius:10px;border:1px solid #233047;background:#0e1626;cursor:pointer}
-    .tabs .tab.active{background:#1f2937}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    .field{display:flex;flex-direction:column;gap:6px;flex:1 1 220px}
-    .field input{padding:10px;border-radius:10px;border:1px solid #233047;background:#0b1220;color:#e5e7eb}
-    .muted{color:#9aa8bf}
-
-    /* Wrap i Table su u /css/game.css – samo osiguramo center na mobu */
-    .wrap{padding:16px}
-
-    /* Nick/stack overlay tweak */
-    .seat .nick,.seat .stack{pointer-events:none}
-
-    /* Status poruke */
-    #toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#0b1220;border:1px solid #233047;border-radius:10px;padding:10px 12px;color:#dbe3f4;display:none}
-    #toast.show{display:block}
+    :root{ --bg:#0b1220; --card:#121a2b; --line:#233047; --text:#e5e7eb; --muted:#9aa4b2; --ok:#10b981; --bad:#ef4444; --btn:#2563eb; }
+    *{ box-sizing:border-box } body{ margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial }
+    .wrap{ max-width:980px; margin:0 auto; padding:16px }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:12px 0 }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+    .col{ display:flex; flex-direction:column; gap:8px }
+    input,select{ background:#0f172a; border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:10px; width:100% }
+    button{ background:var(--btn); color:#fff; border:0; padding:10px 14px; border-radius:10px; cursor:pointer }
+    button.ghost{ background:transparent; border:1px solid var(--line) }
+    .muted{ color:var(--muted) } .right{ margin-left:auto } .hidden{ display:none }
+    table{ width:100%; border-collapse:collapse } th,td{ padding:8px 10px; border-bottom:1px solid var(--line); text-align:left }
+    .pill{ padding:3px 8px; border-radius:999px; background:#0f1b34; border:1px solid var(--line); font-weight:600 }
+    .ok{ color:var(--ok) } .bad{ color:var(--bad) }
+    .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px } @media(max-width:900px){ .grid2{ grid-template-columns:1fr } }
+    #toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:16px; background:#111827; color:#fff; padding:10px 14px; border-radius:10px; border:1px solid var(--line) }
+    #board{ display:flex; gap:8px } .cardimg{ width:56px; height:76px; background:#0f172a; border:1px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700 }
+    .seat{ padding:10px; border:1px solid var(--line); border-radius:10px; background:#0f172a }
+    .seat.me{ outline:2px solid var(--ok) }
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <h1>POKER</h1>
 
-  <!-- ====== TOPBAR ====== -->
-  <header class="topbar">
-    <div class="brand">POKER</div>
-    <div class="right">
-      <span id="who" class="badge">Not logged in</span>
-      <span id="balance" class="badge">0g 0s</span>
-      <button id="btn-logout" class="btn secondary hidden">Logout</button>
-    </div>
-  </header>
-
-  <main class="page">
-
-    <!-- ====== AUTH (REGISTER / LOGIN) ====== -->
-    <section id="page-auth" class="card">
-      <div class="tabs">
-        <div id="tab-register" class="tab active">Register</div>
-        <div id="tab-login" class="tab">Login</div>
-      </div>
-
-      <!-- Register -->
-      <div id="pane-register">
-        <div class="row">
-          <div class="field">
-            <label>Email</label>
-            <input id="reg-email" type="email" placeholder="you@example.com">
-          </div>
-          <div class="field">
-            <label>Password (min 6)</label>
-            <input id="reg-pass" type="password" minlength="6" placeholder="••••••">
-          </div>
-          <div class="field">
-            <label>Nickname (prikaz u igri)</label>
-            <input id="reg-nick" type="text" placeholder="npr. Sharky">
-          </div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button id="btn-register" class="btn primary">Create account</button>
-        </div>
-        <div id="msg-register" class="muted" style="margin-top:6px"></div>
-      </div>
-
-      <!-- Login -->
-      <div id="pane-login" class="hidden">
-        <div class="row">
-          <div class="field">
-            <label>Email</label>
-            <input id="login-email" type="email" placeholder="you@example.com">
-          </div>
-          <div class="field">
-            <label>Password</label>
-            <input id="login-pass" type="password" placeholder="••••••">
-          </div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button id="btn-login" class="btn primary">Login</button>
-        </div>
-        <div id="msg-login" class="muted" style="margin-top:6px"></div>
-      </div>
-    </section>
-
-    <!-- ====== LOBBY ====== -->
-    <section id="page-lobby" class="card hidden">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h3 style="margin:0">Lobby</h3>
-        <button id="btn-refresh-lobby" class="btn secondary">Refresh</button>
-      </div>
-      <div id="lobby-list" class="muted" style="margin-top:8px">Loading…</div>
-    </section>
-
-    <!-- ====== TABLE ====== -->
-    <section id="page-table" class="hidden">
-      <!-- mini status -->
-      <div class="card" style="display:flex;justify-content:space-between;align-items:center">
-        <div id="table-status" class="muted">Table • —</div>
-        <div class="row">
-          <button id="btn-back-lobby" class="btn secondary">← Lobby</button>
-          <button id="btn-join" class="btn">Sjedni (buy-in)</button>
-          <button id="btn-leave" class="btn secondary">Ustani</button>
-        </div>
-      </div>
-
-      <!-- ===== TABLE WRAP (keeps aspect and centers) ===== -->
-      <main class="wrap">
-        <!-- data-seats se postavlja iz stanja (6/9) -->
-        <section id="table" class="table" data-seats="9" aria-label="Poker table">
-          <!-- background (poker_table.png) je u CSS-u kroz ::before -->
-
-          <!-- ===== BOARD ===== -->
-          <div class="board" aria-label="Board cards">
-            <div class="card slot flop1"><img src="/card_front_blank.png" alt=""></div>
-            <div class="card slot flop2"><img src="/card_front_blank.png" alt=""></div>
-            <div class="card slot flop3"><img src="/card_front_blank.png" alt=""></div>
-            <div class="card slot turn"><img src="/card_front_blank.png" alt=""></div>
-            <div class="card slot river"><img src="/card_front_blank.png" alt=""></div>
-          </div>
-
-          <!-- ===== BADGES ===== -->
-          <img class="badge btn" src="/dealer_button.png" alt="Dealer" style="display:none">
-          <img class="badge sb"  src="/small_blind.png"  alt="Small Blind" style="display:none">
-          <img class="badge bb"  src="/big_blind.png"    alt="Big Blind" style="display:none">
-
-          <!-- ===== SEATS (0..8) ===== -->
-          <!-- Placeholder i player avatar; player je skriven dok seat nije occupied -->
-          <div class="seat seat--0" data-index="0">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_1.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--1" data-index="1">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_2.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--2" data-index="2">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_3.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--3" data-index="3">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_4.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--4" data-index="4">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_5.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--5" data-index="5">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_6.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--6" data-index="6">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_7.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--7" data-index="7">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_8.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-          <div class="seat seat--8" data-index="8">
-            <div class="ring"></div>
-            <img class="avatar placeholder" src="/seat_empty.png" alt="Empty seat">
-            <img class="avatar player" src="/avatar_1.png" alt="Player" />
-            <div class="nick">—</div>
-            <div class="stack">—</div>
-          </div>
-
-          <!-- ===== POT / INFO STRIP ===== -->
-          <div class="info">
-            <div class="pot">
-              <img src="/chip_100.png" alt="" class="chip">
-              <span id="pot-amount">0</span>
+    <!-- AUTH -->
+    <div id="auth" class="card">
+      <div class="grid2">
+        <div>
+          <h3>Prijava</h3>
+          <div class="col">
+            <input id="login-email" type="email" placeholder="Email" />
+            <input id="login-pass" type="password" placeholder="Lozinka" />
+            <div class="row">
+              <button id="btn-login">Login</button>
+              <span id="login-msg" class="muted"></span>
             </div>
-            <div class="turn" id="turn-label">Waiting…</div>
           </div>
-        </section>
-
-        <!-- ===== ACTION PANEL (disabled – kasnije) ===== -->
-        <section class="panel">
-          <div class="bets">
-            <button class="btn" disabled>Fold</button>
-            <button class="btn" disabled>Check</button>
-            <button class="btn" disabled>Call</button>
-            <button class="btn" disabled>Raise</button>
-            <button class="btn primary" disabled>All-in</button>
+        </div>
+        <div>
+          <h3>Registracija</h3>
+          <div class="col">
+            <input id="reg-email" type="email" placeholder="Email" />
+            <input id="reg-pass" type="password" placeholder="Lozinka (min 6)" />
+            <input id="reg-nick" type="text" placeholder="Nickname (3–16, A-Z 0-9 _ . -)" />
+            <div class="row">
+              <button id="btn-register">Kreiraj račun</button>
+              <span id="reg-msg" class="muted"></span>
+            </div>
           </div>
-          <div class="sizing">
-            <button class="btn tiny" disabled>2×BB</button>
-            <button class="btn tiny" disabled>3×BB</button>
-            <button class="btn tiny" disabled>½ pot</button>
-            <button class="btn tiny" disabled>pot</button>
-            <input class="bet-input" type="number" min="0" step="1" placeholder="Bet…" disabled />
+        </div>
+      </div>
+    </div>
+
+    <!-- DASH -->
+    <div id="dash" class="card hidden">
+      <div class="row">
+        <div><b id="user-email"></b> <span class="muted">(<span id="user-nick"></span>)</span></div>
+        <div class="pill">Chips: <span id="user-gold">0</span>g <span id="user-silver">0</span>s</div>
+        <button id="btn-logout" class="right ghost">Logout</button>
+      </div>
+    </div>
+
+    <!-- LOBBY -->
+    <div id="lobby" class="card hidden">
+      <div class="row">
+        <h3 style="margin:0">Lobby</h3>
+        <button id="btn-refresh" class="right ghost">Osvježi</button>
+      </div>
+      <table id="tbl-lobby">
+        <thead><tr><th>Stol</th><th>Seats</th><th>Blinds</th><th>Buy-in (BB)</th><th>Igrača</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- TABLE -->
+    <div id="table" class="card hidden">
+      <div class="row">
+        <h3 id="t-name" style="margin:0">Stol</h3>
+        <span class="muted" id="t-blinds"></span>
+        <span class="pill" id="t-state"></span>
+        <button id="btn-back" class="right ghost">← Lobby</button>
+      </div>
+
+      <div class="grid2">
+        <div class="col">
+          <div id="board" class="row"></div>
+          <div id="seats" class="col"></div>
+        </div>
+        <div class="col">
+          <div class="card">
+            <div class="row">
+              <input id="inp-buyin" type="number" placeholder="Buy-in u BB (npr. 50)" />
+              <input id="inp-seat" type="number" placeholder="Seat index (0-8)" />
+              <button id="btn-join">Join</button>
+              <button id="btn-rebuy" class="ghost">Rebuy</button>
+              <button id="btn-leave" class="ghost">Leave</button>
+            </div>
           </div>
-        </section>
-      </main>
-    </section>
-  </main>
+          <div class="card">
+            <div class="row">
+              <button data-act="check" class="ghost">Check</button>
+              <button data-act="call"  class="ghost">Call</button>
+              <input id="inp-bet" type="number" placeholder="Iznos (s)" />
+              <button data-act="bet">Bet</button>
+              <button data-act="raise">Raise</button>
+              <button data-act="fold" class="ghost">Fold</button>
+              <button data-act="allin" class="bad">All-in</button>
+            </div>
+            <div class="muted" id="act-hint"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  <div id="toast"></div>
+    <div id="toast" class="hidden"></div>
+  </div>
 
-  <script>
-    // ===== Helpers =====
-    const $ = s => document.querySelector(s);
-    const api = async (path, opts={})=>{
-      const res = await fetch(path, { credentials:"include", headers:{ "Content-Type":"application/json", ...(opts.headers||{})}, ...opts });
-      let data=null; try{ data=await res.json(); }catch{}
-      if(!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
-      return data;
-    };
-    const toast = (t, ok=true)=>{ const el=$("#toast"); el.textContent=t; el.style.borderColor = ok?"#1f4f2a":"#4f1f1f"; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"), 1800); };
+<script>
+(function(){
+  // Helpers
+  const $  = (s, r=document)=>r.querySelector(s);
+  const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+  const toast = (t)=>{ const b=$("#toast"); b.textContent=t; b.classList.remove("hidden"); setTimeout(()=>b.classList.add("hidden"), 2200); };
+  const api = async (url, opt={})=>{
+    const r = await fetch(url, { headers:{ "Content-Type":"application/json", ...(opt.headers||{}) }, credentials:"include", ...opt });
+    const j = await r.json().catch(()=>({ok:false,error:"Bad JSON"}));
+    if (!r.ok || !j.ok) throw new Error(j.error||("HTTP "+r.status));
+    return j;
+  };
 
-    // Local nickname (dok server nema nickname polje)
-    const getNick = ()=> localStorage.getItem("nick") || "";
-    const setNick  = v => localStorage.setItem("nick", String(v||"").slice(0,24));
+  // State
+  let me=null, ws=null, curTable=null;
 
-    // ===== GLOBAL STATE =====
-    let ME = null;      // {id,email,is_admin,gold,silver}
-    let WS = null;      // WebSocket
-    let CUR_TABLE = null;  // last table row
-    let CUR_TABLE_ID = null;
+  // UI refs
+  const auth  = $("#auth");
+  const dash  = $("#dash");
+  const lobby = $("#lobby");
+  const table = $("#table");
 
-    // ===== UI Switch =====
-    function show(page){
-      $("#page-auth") .classList.toggle("hidden", page!=="auth");
-      $("#page-lobby").classList.toggle("hidden", page!=="lobby");
-      $("#page-table").classList.toggle("hidden", page!=="table");
+  function showAuth(){ auth.classList.remove("hidden"); dash.classList.add("hidden"); lobby.classList.add("hidden"); table.classList.add("hidden"); }
+  function showLobby(){ auth.classList.add("hidden"); dash.classList.remove("hidden"); lobby.classList.remove("hidden"); table.classList.add("hidden"); }
+  function showTable(){ auth.classList.add("hidden"); dash.classList.remove("hidden"); lobby.classList.add("hidden"); table.classList.remove("hidden"); }
+
+  async function refreshMe(){
+    try{
+      const j = await api("/api/me");
+      me = j.user;
+      $("#user-email").textContent = me.email;
+      $("#user-nick").textContent  = me.nickname || "—";
+      $("#user-gold").textContent  = me.gold|0;
+      $("#user-silver").textContent= me.silver|0;
+      return true;
+    }catch{ me=null; return false; }
+  }
+
+  async function loadLobby(){
+    const j = await api("/api/poker/lobby");
+    const tb = $("#tbl-lobby tbody"); tb.innerHTML="";
+    for (const t of j.tables){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${t.name}</td>
+        <td>${t.seats}</td>
+        <td>${(t.sb_s/100)|0}g/${(t.bb_s/100)|0}g</td>
+        <td>${t.min_buyin_bb}–${t.max_buyin_bb}</td>
+        <td>${t.players||0}</td>
+        <td><button data-id="${t.id}" class="btn-open">Otvori</button></td>`;
+      tb.appendChild(tr);
     }
-    function updateTopbar(){
-      if (ME){
-        $("#who").textContent = `${ME.email}`;
-        $("#balance").textContent = `${ME.gold}g ${ME.silver}s`;
-        $("#btn-logout").classList.remove("hidden");
-      }else{
-        $("#who").textContent = "Not logged in";
-        $("#balance").textContent = "0g 0s";
-        $("#btn-logout").classList.add("hidden");
+    $$(".btn-open").forEach(b=> b.onclick = ()=> openTable(parseInt(b.getAttribute("data-id"),10)));
+  }
+
+  async function openTable(id){
+    const j = await api(`/api/poker/table/${id}/state`);
+    curTable = j.table;
+    $("#t-name").textContent = curTable.name;
+    $("#t-blinds").textContent = `Blinds: ${curTable.sb_s/100}g / ${curTable.bb_s/100}g`;
+    $("#t-state").textContent = j.hand ? j.hand.state : "waiting";
+    renderBoard(j.hand?.board||"");
+    renderSeats(j.seats);
+    showTable();
+    ensureWS();
+  }
+
+  function renderBoard(boardStr){
+    const b = $("#board"); b.innerHTML="";
+    const cards = (boardStr||"").split(",").filter(Boolean);
+    for (let c of cards){
+      const div = document.createElement("div"); div.className="cardimg"; div.textContent=c; b.appendChild(div);
+    }
+  }
+  function renderSeats(seats){
+    const box = $("#seats"); box.innerHTML="";
+    seats.forEach(s=>{
+      const div = document.createElement("div");
+      div.className = "seat" + (s.user_id===me?.id ? " me" : "");
+      div.innerHTML = `
+        <div><b>Seat ${s.seat_index}</b></div>
+        <div>Stack: ${(s.stack_s/100)|0}g ${(s.stack_s%100)|0}s</div>
+        <div>State: ${s.state}${s.in_hand? " (in hand)":""}</div>
+        <div class="muted">${s.last_action || ""}</div>
+      `;
+      box.appendChild(div);
+    });
+  }
+
+  function ensureWS(){
+    if (ws && ws.readyState===1) return;
+    ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host);
+    ws.onopen = ()=> console.log("WS open");
+    ws.onmessage = (ev)=>{
+      let m; try{ m=JSON.parse(ev.data); }catch{ return; }
+      if (m.type==="table_state" && m.table_id===curTable?.id){
+        $("#t-state").textContent = m.table?.status || m.table?.state || "live";
+        renderSeats(m.seats||[]);
       }
-    }
+      if (m.type==="board_update" && curTable && m.table_id===curTable.id){
+        renderBoard((m.board||[]).join(","));
+      }
+      if (m.type==="action_required" && curTable){
+        $("#act-hint").textContent = `Na potezu: seat ${m.seat_index} — ${Math.floor((m.ms_left||0)/1000)}s`;
+      }
+      if (m.type==="error"){ toast("Greška: "+(m.message||m.code)); }
+    };
+  }
 
-    // ===== AUTH =====
-    function wireAuthTabs(){
-      const regTab = $("#tab-register");
-      const logTab = $("#tab-login");
-      const regPane= $("#pane-register");
-      const logPane= $("#pane-login");
-      const act = (tab)=>{
-        regTab.classList.toggle("active", tab==="reg");
-        logTab.classList.toggle("active", tab==="log");
-        regPane.classList.toggle("hidden", tab!=="reg");
-        logPane.classList.toggle("hidden", tab!=="log");
-      };
-      regTab.onclick = ()=> act("reg");
-      logTab.onclick = ()=> act("log");
-      act("reg");
-    }
-
-    async function tryMe(){
-      try{
-        const r = await api("/api/me");
-        ME = r.user;
-      }catch{ ME = null; }
-      updateTopbar();
-      if (ME){ show("lobby"); loadLobby(); openWS(); }
-      else { show("auth"); }
-    }
-
-    async function doRegister(){
-      $("#msg-register").textContent = "Registering…";
+  // Buttons
+  $("#btn-login").onclick = async ()=>{
+    try{
+      const email = $("#login-email").value.trim();
+      const pass  = $("#login-pass").value;
+      await api("/api/login",{ method:"POST", body:JSON.stringify({ email, password:pass }) });
+      await refreshMe(); await loadLobby(); showLobby(); toast("Ulogovan");
+    }catch(e){ $("#login-msg").textContent = e.message; }
+  };
+  $("#btn-register").onclick = async ()=>{
+    try{
       const email = $("#reg-email").value.trim();
       const pass  = $("#reg-pass").value;
       const nick  = $("#reg-nick").value.trim();
-      try{
-        await api("/api/register", { method:"POST", body: JSON.stringify({ email, password: pass }) });
-        setNick(nick);
-        await doLogin(email, pass, true);
-        $("#msg-register").textContent = "";
-      }catch(e){
-        $("#msg-register").textContent = e.message;
-      }
-    }
+      await api("/api/register",{ method:"POST", body:JSON.stringify({ email, password:pass, nickname:nick }) });
+      toast("Račun kreiran — sada se uloguj"); $("#reg-msg").textContent="";
+    }catch(e){ $("#reg-msg").textContent = e.message; }
+  };
+  $("#btn-logout").onclick = async ()=>{ try{ await api("/api/logout"); me=null; showAuth(); toast("Odjavljeno"); }catch{} };
+  $("#btn-refresh").onclick = ()=> loadLobby();
+  $("#btn-back").onclick    = ()=> showLobby();
 
-    async function doLogin(emailOpt=null, passOpt=null, fromRegister=false){
-      $("#msg-login").textContent = fromRegister ? "" : "Logging in…";
-      const email = emailOpt || $("#login-email").value.trim();
-      const pass  = passOpt  || $("#login-pass").value;
-      try{
-        const r = await api("/api/login", { method:"POST", body: JSON.stringify({ email, password: pass }) });
-        ME = r.user;
-        updateTopbar();
-        show("lobby");
-        loadLobby();
-        openWS();
-        $("#msg-login").textContent = "";
-        toast("Logged in", true);
-      }catch(e){
-        $("#msg-login").textContent = e.message;
-      }
-    }
+  $("#btn-join").onclick = async ()=>{
+    if (!curTable) return;
+    try{
+      const buyin = parseInt($("#inp-buyin").value,10)||0;
+      const seat  = parseInt($("#inp-seat").value,10); // -1 za auto
+      const j = await api(`/api/poker/table/${curTable.id}/join`, { method:"POST", body:JSON.stringify({ buyin_bb:buyin, seat_index:isFinite(seat)?seat:-1 }) });
+      toast(`Sjeo si na seat ${j.seat_index} (stack ${(j.stack_s/100)|0}g)`);
+      await openTable(curTable.id);
+    }catch(e){ toast("Join: "+e.message); }
+  };
+  $("#btn-rebuy").onclick = async ()=>{
+    if (!curTable) return;
+    try{
+      const buyin = parseInt($("#inp-buyin").value,10)||0;
+      const j = await api(`/api/poker/table/${curTable.id}/rebuy`, { method:"POST", body:JSON.stringify({ buyin_bb:buyin }) });
+      toast(`Rebuy OK (seat ${j.seat_index}, stack ${(j.stack_s/100)|0}g)`);
+      await openTable(curTable.id);
+    }catch(e){ toast("Rebuy: "+e.message); }
+  };
+  $("#btn-leave").onclick = async ()=>{
+    if (!curTable) return;
+    try{
+      const j = await api(`/api/poker/table/${curTable.id}/leave`, { method:"POST" });
+      toast(`Leave OK (vraceno ${(j.returned_s/100)|0}g ${(j.returned_s%100)|0}s)`);
+      await openTable(curTable.id);
+    }catch(e){ toast("Leave: "+e.message); }
+  };
 
-    async function doLogout(){
-      try{ await api("/api/logout"); }catch{}
-      ME=null; updateTopbar();
-      if (WS){ try{ WS.close(); }catch{} WS=null; }
-      show("auth");
-    }
+  // Actions
+  $$("#table [data-act]").forEach(b=>{
+    b.onclick = ()=>{
+      if (!curTable || !ws || ws.readyState!==1) return toast("WS nije spreman");
+      const act = b.getAttribute("data-act");
+      const amt = parseInt($("#inp-bet").value,10)|0;
+      ws.send(JSON.stringify({ type:"player_action", payload:{ table_id:curTable.id, seat_index:0, action:act, amount_s:amt } }));
+      // seat_index:0 je placeholder — klijent obično zna svoj seat; u produkciji dohvati ga iz seats[] gdje user_id===me.id
+    };
+  });
 
-    // ===== LOBBY =====
-    async function loadLobby(){
-      const box = $("#lobby-list");
-      box.textContent = "Loading…";
-      try{
-        const r = await api("/api/poker/lobby");
-        const rows = r.tables || [];
-        if (!rows.length){ box.textContent = "No tables."; return; }
-        // Render
-        const frag = document.createDocumentFragment();
-        rows.forEach(t=>{
-          const div = document.createElement("div");
-          div.className = "card";
-          const players = Number(t.players||0);
-          div.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-              <div>
-                <div style="font-weight:600">${t.name}</div>
-                <div class="muted">${t.seats}-max • ${t.sb_s/100}/${t.bb_s/100} g • timer ${t.turn_timer_s}s</div>
-              </div>
-              <div class="muted">${players}/${t.seats} players</div>
-              <div>
-                <button class="btn" data-id="${t.id}">Uđi</button>
-              </div>
-            </div>`;
-          frag.appendChild(div);
-        });
-        box.innerHTML = "";
-        box.appendChild(frag);
-        box.querySelectorAll("button.btn").forEach(b=>{
-          b.addEventListener("click", ()=> enterTable(parseInt(b.dataset.id,10)));
-        });
-      }catch(e){
-        box.textContent = e.message || "Failed.";
-      }
-    }
+  // Boot
+  (async ()=>{
+    if (await refreshMe()){ await loadLobby(); showLobby(); } else { showAuth(); }
+  })();
 
-    // ===== TABLE =====
-    async function enterTable(id){
-      CUR_TABLE_ID = id;
-      show("table");
-      await refreshTableState();
-    }
-
-    async function refreshTableState(){
-      if (!CUR_TABLE_ID) return;
-      try{
-        const r = await api(`/api/poker/table/${CUR_TABLE_ID}/state`);
-        CUR_TABLE = r.table;
-        renderTableMeta(r.table);
-        renderSeats(r.seats||[]);
-        renderBoardStr(r.hand?.board || "");
-      }catch(e){
-        toast(e.message, false);
-      }
-    }
-
-    function renderTableMeta(t){
-      $("#table-status").textContent = `${t.name} • ${t.bb_s/100}g BB • ${t.seats}-max`;
-      const el = document.getElementById("table");
-      el.setAttribute("data-seats", String(t.seats||9));
-    }
-
-    function renderSeats(seats){
-      // seats: [{seat_index,user_id,stack_s,state,in_hand,last_action}]
-      seats.forEach(s=>{
-        const el = document.querySelector(`.seat[data-index="${s.seat_index}"]`);
-        if(!el) return;
-        const nickEl = el.querySelector(".nick");
-        const stackEl= el.querySelector(".stack");
-        const ph = el.querySelector(".avatar.placeholder");
-        const pl = el.querySelector(".avatar.player");
-        // occupied?
-        const occ = s.user_id!=null && (s.state==="occupied" || s.state==="sitout");
-        el.classList.toggle("occupied", !!occ);
-        ph.style.display = occ ? "none" : "block";
-        pl.style.display = occ ? "block" : "none";
-        // nick
-        let label = "—";
-        if (occ){
-          if (ME && s.user_id===ME.id){
-            label = getNick() || ME.email;
-          } else {
-            label = `Player #${s.user_id}`;
-          }
-        }
-        nickEl.textContent = label;
-        // stack (u gold/silver)
-        const g = Math.floor((s.stack_s|0)/100), si = (s.stack_s|0)%100;
-        stackEl.textContent = occ ? `${g}g ${si}s` : "—";
-        // ring (acting)
-        el.classList.toggle("acting", !!s.in_hand && s.last_action==="acting");
-      });
-    }
-
-    function renderBoardStr(boardStr){
-      const arr = boardStr ? boardStr.split(",").filter(Boolean) : [];
-      const slots = [
-        ".flop1",".flop2",".flop3",".turn",".river"
-      ];
-      for (let i=0;i<slots.length;i++){
-        const el = document.querySelector(`.board ${slots[i]} img`);
-        if (!el) continue;
-        const code = arr[i] || null;
-        el.src = code ? `/card_${code}.png` : "/card_front_blank.png";
-        el.alt = code || "";
-      }
-    }
-
-    // Join / Leave
-    async function doJoin(){
-      if (!CUR_TABLE_ID){ toast("No table.", false); return; }
-      // buyin prompt u BB
-      const bb = CUR_TABLE?.bb_s || 200;
-      let buyinBB = prompt(`Buy-in u BB (min ${CUR_TABLE.min_buyin_bb}, max ${CUR_TABLE.max_buyin_bb})`, String(CUR_TABLE.min_buyin_bb||50));
-      if (!buyinBB) return;
-      buyinBB = Math.max(CUR_TABLE.min_buyin_bb, Math.min(CUR_TABLE.max_buyin_bb, parseInt(buyinBB,10)||CUR_TABLE.min_buyin_bb));
-      try{
-        const r = await api(`/api/poker/table/${CUR_TABLE_ID}/join`, { method:"POST", body: JSON.stringify({ buyin_bb: buyinBB }) });
-        toast(`Sjeo si na mjesto ${r.seat_index} (+${Math.floor(r.stack_s/100)}g).`, true);
-        await tryMe();         // refresh balance
-        await refreshTableState();
-      }catch(e){ toast(e.message, false); }
-    }
-    async function doLeave(){
-      if (!CUR_TABLE_ID) return;
-      try{
-        const r = await api(`/api/poker/table/${CUR_TABLE_ID}/leave`, { method:"POST" });
-        toast(`Leave: vraćeno ${Math.floor(r.returned_s/100)}g.`, true);
-        await tryMe();
-        await refreshTableState();
-      }catch(e){ toast(e.message, false); }
-    }
-
-    // ===== WS =====
-    function openWS(){
-      try{ if (WS) { WS.close(); WS=null; } }catch{}
-      const url = (location.protocol==="https:"?"wss://":"ws://") + location.host + "/";
-      WS = new WebSocket(url);
-      WS.onopen  = ()=>{/* ping je opcionalan */};
-      WS.onclose = ()=>{/* auto-reconnect jednostavno: pri slijedećem actionu */};
-      WS.onmessage = (e)=>{
-        let m=null; try{ m=JSON.parse(e.data); }catch{ return; }
-        const t = m.type;
-        if (t==="connection_open"){ /* { env, uid } */ }
-        if (t==="lobby_update"){ if ($("#page-lobby") && !$("#page-lobby").classList.contains("hidden")) loadLobby(); }
-        if (t==="table_state"){
-          if (CUR_TABLE_ID && m.table_id===CUR_TABLE_ID){
-            CUR_TABLE = m.table; renderTableMeta(m.table); renderSeats(m.seats||[]);
-          }
-        }
-        if (t==="board_update"){
-          if (CUR_TABLE_ID && m.table_id===CUR_TABLE_ID){
-            // m.board: ["AS","KD","QH",...]
-            const joined = (m.board||[]).join(",");
-            renderBoardStr(joined);
-          }
-        }
-        if (t==="action_required"){
-          if (CUR_TABLE_ID && m.table_id===CUR_TABLE_ID){
-            const all = document.querySelectorAll(".seat"); all.forEach(s=>s.classList.remove("acting"));
-            const el = document.querySelector(`.seat[data-index="${m.seat_index}"]`);
-            if (el) el.classList.add("acting");
-            const sec = Math.max(0, Math.floor((m.ms_left||0)/1000));
-            $("#turn-label").textContent = `Na potezu: seat ${m.seat_index} • ${sec}s`;
-          }
-        }
-        if (t==="player_action"){
-          // za sad samo osvježi state
-          if (CUR_TABLE_ID && m.table_id===CUR_TABLE_ID){ refreshTableState(); }
-        }
-        if (t==="showdown"){
-          if (CUR_TABLE_ID && m.table_id===CUR_TABLE_ID){
-            // prikaz potova i isplata u labeli
-            const total = (m.results||[]).reduce((a,b)=>a+(b.amount_s||0),0);
-            $("#turn-label").textContent = `Showdown • total ${Math.floor(total/100)}g`;
-          }
-        }
-        if (t==="payouts"){
-          if (CUR_TABLE_ID && m.table_id===CUR_TABLE_ID){
-            const total = (m.payouts||[]).reduce((a,b)=>a+(b.amount_s||0),0);
-            $("#turn-label").textContent = `Payouts • ${Math.floor(total/100)}g`;
-            tryMe(); // refresh balance
-          }
-        }
-        if (t==="error"){
-          toast(`${m.code}${m.message?": "+m.message:""}`, false);
-        }
-      };
-    }
-
-    // ===== Wire buttons =====
-    wireAuthTabs();
-    $("#btn-register").addEventListener("click", doRegister);
-    $("#btn-login").addEventListener("click", ()=> doLogin());
-    $("#btn-logout").addEventListener("click", doLogout);
-    $("#btn-refresh-lobby").addEventListener("click", loadLobby);
-    $("#btn-back-lobby").addEventListener("click", ()=>{ show("lobby"); loadLobby(); });
-    $("#btn-join").addEventListener("click", doJoin);
-    $("#btn-leave").addEventListener("click", doLeave);
-
-    // Go
-    tryMe();
-  </script>
+})();
+</script>
 </body>
 </html>
