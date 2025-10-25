@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Poker Table</title>
+<link rel="stylesheet" href="/game.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="status" id="status">Loading table...</div>
+
+  <div id="table" class="table" data-seats="9">
+    <div class="board" id="board">
+      <!-- JS ubacuje karte -->
+    </div>
+
+    <!-- 9 mjesta (auto radi i za 2-9 sjedala) -->
+    <div class="seat" data-i="0"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="1"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="2"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="3"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="4"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="5"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="6"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="7"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <div class="seat" data-i="8"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+
+  </div>
+
+  <div class="actions" id="actions">
+    <button onclick="fold()">Fold</button>
+    <button onclick="check()">Check</button>
+    <button onclick="call()">Call</button>
+    <button onclick="bet()">Bet</button>
+  </div>
+
+</div>
+
+<script src="/table.js"></script>
+</body>
+</html>
