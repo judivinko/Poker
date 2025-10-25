@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Poker Table</title>
+  <link rel="stylesheet" href="/css/game.css" />
+</head>
+<body>
+
+  <!-- ===== HEADER (mini) ===== -->
+  <header class="topbar">
+    <div class="brand">POKER</div>
+    <div class="status" id="status">Table • 1/2 • 9-max</div>
+  </header>
+
+  <!-- ===== TABLE WRAP (keeps aspect and centers) ===== -->
+  <main class="wrap">
+    <!-- data-seats: 6 ili 9; mijenja raspored sjedišta -->
+    <section id="table" class="table" data-seats="9" aria-label="Poker table">
+
+      <!-- background (poker_table.png) je u CSS-u kroz ::before -->
+
+      <!-- ===== BOARD (community cards) ===== -->
+      <div class="board" aria-label="Board cards">
+        <div class="card slot flop1"><img src="/images/cards/card_front_blank.png" alt=""></div>
+        <div class="card slot flop2"><img src="/images/cards/card_front_blank.png" alt=""></div>
+        <div class="card slot flop3"><img src="/images/cards/card_front_blank.png" alt=""></div>
+        <div class="card slot turn"><img src="/images/cards/card_front_blank.png" alt=""></div>
+        <div class="card slot river"><img src="/images/cards/card_front_blank.png" alt=""></div>
+      </div>
+
+      <!-- ===== BADGES (BTN/SB/BB) — pozicioniraju se na sjedišta kroz CSS varijable ===== -->
+      <img class="badge btn" src="/images/ui/dealer_button.png" alt="Dealer">
+      <img class="badge sb"  src="/images/ui/small_blind.png"  alt="Small Blind">
+      <img class="badge bb"  src="/images/ui/big_blind.png"    alt="Big Blind">
+
+      <!-- ===== SEATS (0..8) ===== -->
+      <!-- Svako mjesto ima: avatar (ili seat_empty), ime, balans, prsten-timer -->
+      <!-- Ako je prazno, samo .placeholder je vidljiv; kada sjedne igrač, dodaj .occupied na .seat -->
+      <!-- Napomena: koordinate su u CSS-u po .seat--N klasi -->
+      <div class="seat seat--0" data-index="0">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_1.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--1" data-index="1">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_2.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--2" data-index="2">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_3.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--3" data-index="3">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_4.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--4" data-index="4">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_5.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--5" data-index="5">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_6.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--6" data-index="6">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_7.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--7" data-index="7">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_8.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+      <div class="seat seat--8" data-index="8">
+        <div class="ring"></div>
+        <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
+        <img class="avatar player" src="/images/avatars/avatar_1.png" alt="Player" />
+        <div class="nick">—</div>
+        <div class="stack">—</div>
+      </div>
+
+      <!-- ===== POT / INFO STRIP ===== -->
+      <div class="info">
+        <div class="pot">
+          <img src="/images/chips/chip_100.png" alt="" class="chip">
+          <span id="pot-amount">0</span>
+        </div>
+        <div class="turn" id="turn-label">Waiting for players…</div>
+      </div>
+    </section>
+
+    <!-- ===== ACTION PANEL (disabled za sada; živi JS kasnije) ===== -->
+    <section class="panel">
+      <div class="bets">
+        <button class="btn" disabled>Fold</button>
+        <button class="btn" disabled>Check</button>
+        <button class="btn" disabled>Call</button>
+        <button class="btn" disabled>Raise</button>
+        <button class="btn primary" disabled>All-in</button>
+      </div>
+      <div class="sizing">
+        <button class="btn tiny" disabled>2×BB</button>
+        <button class="btn tiny" disabled>3×BB</button>
+        <button class="btn tiny" disabled>½ pot</button>
+        <button class="btn tiny" disabled>pot</button>
+        <input class="bet-input" type="number" min="0" step="1" placeholder="Bet…" disabled />
+      </div>
+    </section>
+  </main>
+
+  <!-- Future: <script src="/js/table.js"></script> -->
+</body>
+</html>
+
