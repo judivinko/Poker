@@ -7,136 +7,121 @@
   <link rel="stylesheet" href="/css/game.css" />
   <meta name="color-scheme" content="dark" />
   <style>
-    /* Lagani stil za topbar i panel da ne ovisi o game.css */
-    body{margin:0;background:#0b0d13;color:#e5e7eb;font:400 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial}
+    /* Lagani dodatni stilovi (header, paneli, modali) */
+    :root{ --border:#233047; --bg:#0b0d13; --fg:#e5e7eb; --muted:#9aa4b2; }
+    body{margin:0;background:var(--bg);color:var(--fg);font:400 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial}
     .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
     .brand{font-weight:700;letter-spacing:.6px}
     .wrap{display:flex;flex-direction:column;gap:12px;align-items:center;padding:10px}
     .panel{display:flex;flex-direction:column;gap:8px;align-items:center}
     .bets,.sizing{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-    .btn{background:#111827;border:1px solid #233047;color:#e5e7eb;padding:8px 12px;border-radius:10px}
-    .btn.primary{background:#0ea5b7;border-color:#0ea5b7}
+    .btn{background:#111827;border:1px solid var(--border);color:var(--fg);padding:8px 12px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:#0ea5b7;border-color:#0ea5b7;color:#032b31}
     .btn.tiny{font-size:12px;padding:6px 8px}
-    .bet-input{background:#0b1220;border:1px solid #233047;border-radius:8px;padding:8px 10px;color:#e2e8f0;width:120px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .bet-input{background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:#e2e8f0;width:120px}
     .table{position:relative}
-    /* Pozicioniraj badge traku preko svakog seat-a */
+
+    /* Per-seat badges (BTN/SB/BB) */
     .seat .badges { position:absolute; top:calc(100% - 8px); left:50%; transform:translate(-50%,0); display:flex; gap:6px; }
     .seat .badge{ width:var(--badge); height:var(--badge); background:center/contain no-repeat; }
     .seat .badge.btn{ background-image:url("/images/ui/dealer_button.png"); }
     .seat .badge.sb { background-image:url("/images/ui/small_blind.png"); }
     .seat .badge.bb { background-image:url("/images/ui/big_blind.png"); }
+
+    /* Modal overlay */
+    .overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);z-index:50}
+    .modal{background:#0b1220;border:1px solid var(--border);border-radius:12px;padding:16px;width:min(92vw,360px)}
+    .modal h3{margin:0 0 8px}
+    .row{display:flex;gap:8px;align-items:center}
+    .field{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:#0a1320;color:#e5e7eb}
+    .muted{color:var(--muted)}
+    a.link{color:#22d3ee;text-decoration:none}
+    .status.top{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55vw}
+    @media (max-width:600px){ .status.top{max-width:45vw} }
   </style>
 </head>
 <body>
 
-  <!-- ===== HEADER (mini) ===== -->
+  <!-- ===== HEADER ===== -->
   <header class="topbar">
     <div class="brand">POKER</div>
-    <div class="status" id="status">Table • 1/2 • 9-max</div>
+    <div class="status top" id="status">Loading…</div>
   </header>
 
-  <!-- ===== TABLE WRAP ===== -->
+  <!-- ===== MAIN ===== -->
   <main class="wrap">
     <!-- data-seats: 6 ili 9; mijenja raspored sjedišta (game.css) -->
     <section id="table" class="table" data-seats="9" aria-label="Poker table">
 
-      <!-- ===== BOARD (community cards) ===== -->
+      <!-- ===== BOARD ===== -->
       <div class="board" aria-label="Board cards">
-        <div class="card slot flop1"></div>
-        <div class="card slot flop2"></div>
-        <div class="card slot flop3"></div>
-        <div class="card slot turn"></div>
-        <div class="card slot river"></div>
+        <div class="card slot flop1 back"></div>
+        <div class="card slot flop2 back"></div>
+        <div class="card slot flop3 back"></div>
+        <div class="card slot turn back"></div>
+        <div class="card slot river back"></div>
       </div>
-
-      <!-- ===== GLOBAL BADGES (ne koristimo: koristimo badge unutar svakog seat-a) ===== -->
-      <!-- (ostavljeno prazno namjerno) -->
 
       <!-- ===== SEATS (0..8) ===== -->
       <!-- Napomena: data-i je važno za CSS koordinate (game.css) -->
-      <div class="seat seat--0" data-i="0">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="0">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_1.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--1" data-i="1">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="1">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_2.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--2" data-i="2">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="2">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_3.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--3" data-i="3">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="3">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_4.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--4" data-i="4">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="4">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_5.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--5" data-i="5">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="5">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_6.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--6" data-i="6">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="6">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_7.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--7" data-i="7">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="7">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_8.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
-
-      <div class="seat seat--8" data-i="8">
-        <div class="ring timer"></div>
+      <div class="seat" data-i="8">
+        <div class="timer"></div>
         <img class="avatar placeholder" src="/images/ui/seat_empty.png" alt="Empty seat">
         <img class="avatar player" src="/images/avatars/avatar_1.png" alt="Player" style="display:none" />
-        <div class="badges"></div>
-        <div class="nick">—</div>
-        <div class="stack">—</div>
+        <div class="badges"></div><div class="nick">—</div><div class="stack">—</div>
       </div>
 
-      <!-- ===== POT / INFO ===== -->
-      <div class="info status" style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);">
+      <!-- ===== INFO (pot + čija akcija) ===== -->
+      <div class="status" style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);">
         <div class="pot" style="display:flex;gap:6px;align-items:center">
           <img src="/images/chips/chip_100.png" alt="" class="chip" style="width:16px;height:16px;opacity:.95">
           <span id="pot-amount">0</span>
@@ -145,7 +130,7 @@
       </div>
     </section>
 
-    <!-- ===== ACTION PANEL (test; živo vezanje kasnije) ===== -->
+    <!-- ===== ACTION PANEL ===== -->
     <section class="panel">
       <div class="bets">
         <button id="btn-fold"  class="btn">Fold</button>
@@ -164,24 +149,106 @@
     </section>
   </main>
 
-  <!-- ===== CLIENT LOGIC ===== -->
-  <script src="/js/net.js"></script>
-  <script src="/js/store.js"></script>
-  <script src="/js/ui.js"></script>
+  <!-- ===== AUTH MODAL (login/registracija) ===== -->
+  <div id="auth-overlay" class="overlay">
+    <div class="modal">
+      <h3>Sign in</h3>
+      <input id="auth-email" class="field" placeholder="email" />
+      <input id="auth-pass"  class="field" type="password" placeholder="password (≥6)" style="margin-top:6px" />
+      <div class="row" style="justify-content:flex-end;margin-top:10px">
+        <button id="auth-register" class="btn">Register</button>
+        <button id="auth-login" class="btn primary">Login</button>
+      </div>
+      <div id="auth-msg" class="muted" style="margin-top:8px"></div>
+    </div>
+  </div>
 
-  <!-- ===== INLINE RENDERER (spoj s postojećim DOM-om) ===== -->
+  <!-- ===== BUY-IN MODAL ===== -->
+  <div id="buyin-overlay" class="overlay">
+    <div class="modal">
+      <h3>Buy-in</h3>
+      <div class="muted" id="buyin-info" style="margin-bottom:8px">Min/Max: — BB</div>
+      <label class="muted">Amount (BB)</label>
+      <input id="buyin-bb" type="number" min="1" step="1" value="50" class="field" style="margin-top:6px">
+      <div class="row" style="justify-content:flex-end;margin-top:10px">
+        <button id="buyin-cancel" class="btn">Cancel</button>
+        <button id="buyin-ok" class="btn primary">Join</button>
+      </div>
+      <div id="buyin-msg" class="muted" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <noscript style="color:#fff;display:block;text-align:center;margin:20px 0">
+    This app requires JavaScript to run.
+  </noscript>
+
+  <!-- ===== INLINE JS: API + WS + STORE + RENDER + UI ===== -->
   <script>
+  (function(){
     const TABLE_ID = 1;
 
-    // Utility
+    // ---------- Helpers ----------
     const $  = (s, r=document)=> r.querySelector(s);
     const $$ = (s, r=document)=> Array.from(r.querySelectorAll(s));
+    const api = async (path, opts={})=>{
+      const res = await fetch(path, { credentials:"include", headers:{ "Content-Type":"application/json" }, ...opts });
+      let j=null; try{ j=await res.json(); }catch{}
+      if (!res.ok) throw new Error(j?.error || ("HTTP "+res.status));
+      return j;
+    };
 
-    // Status bar + basic header info
-    function setHeaderStatus(txt){ const e=$("#status"); if (e) e.textContent = txt; }
+    // ---------- Store ----------
+    const Store = { listeners:new Set() };
+    Store.state = { table:null, seats:[], board:[], acting:{ seat_index:null, deadline:0, ms_left:0 } };
+    Store.emit = (type, payload)=> Store.listeners.forEach(fn=>fn({type, ...payload}));
+    Store.on   = (fn)=> (Store.listeners.add(fn), ()=>Store.listeners.delete(fn));
+    Store.get  = ()=> Store.state;
 
-    // Seat helpers
-    function seatEl(i){ return $(`.seat[data-i="${i}"]`, $("#table")); }
+    // WS
+    let ws;
+    function connectWS(){
+      const proto = location.protocol==="https:" ? "wss" : "ws";
+      ws = new WebSocket(proto + "://" + location.host);
+      ws.onopen = ()=> ws.send(JSON.stringify({type:"ping"}));
+      ws.onmessage = (e)=>{
+        let m=null; try{ m=JSON.parse(e.data); }catch{}
+        if (!m || !m.type) return;
+        if (m.type==="table_state"){
+          Store.state.table = m.table; Store.state.seats = m.seats||[];
+        }
+        if (m.type==="board_update"){ Store.state.board = m.board||[]; }
+        if (m.type==="action_required"){
+          Store.state.acting.seat_index = m.seat_index;
+          Store.state.acting.deadline = Date.now() + (m.ms_left|0);
+          Store.state.acting.ms_left  = m.ms_left|0;
+        }
+        if (m.type==="showdown"){ Store.state.board = m.board||[]; }
+        document.dispatchEvent(new CustomEvent("store:update"));
+      };
+      ws.onclose  = ()=> setTimeout(connectWS, 800);
+      ws.onerror  = ()=> { try{ ws.close(); }catch{} };
+    }
+    connectWS();
+
+    // Public UI actions (guard: backend i WS moraju provjeriti seat ownership!)
+    const UI = {
+      fold(table_id, seat_index){ send("player_action", { table_id, seat_index, action:"fold" }); },
+      check(table_id, seat_index){ send("player_action", { table_id, seat_index, action:"check" }); },
+      call(table_id, seat_index){ send("player_action", { table_id, seat_index, action:"call" }); },
+      raise(table_id, seat_index, amount_s){ send("player_action", { table_id, seat_index, action:"raise", amount_s }); },
+      allin(table_id, seat_index){ send("player_action", { table_id, seat_index, action:"allin", amount_s: 9_999_999 }); }
+    };
+    function send(type, payload={}){ try{ (ws && ws.readyState===1) && ws.send(JSON.stringify({type, payload})); }catch{} }
+
+    // ---------- Initial snapshot ----------
+    async function loadState(){
+      const st = await api(`/api/poker/table/${TABLE_ID}/state`);
+      if (st?.hand) Store.lastHandFromState = st.hand;
+      Store.emit("table_state", st);
+    }
+
+    // ---------- Render ----------
+    function seatEl(i){ return $(\`.seat[data-i="\${i}"]\`, $("#table")); }
     function setBadges(i, btn, sb, bb){
       const el = seatEl(i); if (!el) return;
       const box = $(".badges", el); if (!box) return;
@@ -190,29 +257,20 @@
       if (sb===i) { const d=document.createElement("div"); d.className="badge sb";  box.appendChild(d); }
       if (bb===i) { const d=document.createElement("div"); d.className="badge bb";  box.appendChild(d); }
     }
-
-    // Apply table state to DOM
     function render(){
-      const S = window.Store.get();
+      const S = Store.get();
       const t = S.table;
-      if (!t){ setHeaderStatus("Loading table…"); return; }
+      if (!t){ $("#status").textContent="Loading table…"; return; }
 
-      // seats mode
-      const root = $("#table");
-      root?.setAttribute("data-seats", String(t.seats||9));
+      // header
+      $("#status").innerHTML = (window.__ME_EMAIL ? (window.__ME_EMAIL+" • ") : "") + \`\${t.name||"Table"} • \${t.sb_s}/\${t.bb_s} • \${t.seats}-max\`;
+      $("#table")?.setAttribute("data-seats", String(t.seats||9));
 
-      setHeaderStatus(`${t.name||"Table"} • ${t.sb_s}/${t.bb_s} • ${t.seats}-max`);
-
-      // Board
-      const boardArr = S.board || [];
+      // board
       const boardEls = $$(".board .card");
-      boardEls.forEach((c, idx)=>{
-        // Naš CSS prikazuje "back" ako nema karte — jednostavno dodaj/ukloni .back
-        if (idx < boardArr.length) c.classList.remove("back");
-        else c.classList.add("back");
-      });
+      boardEls.forEach((c, idx)=>{ (idx < (S.board||[]).length) ? c.classList.remove("back") : c.classList.add("back"); });
 
-      // Seats
+      // seats render
       const acting = S.acting.seat_index;
       const msLeft = S.acting.ms_left|0;
       (S.seats||[]).forEach(seat=>{
@@ -222,51 +280,113 @@
         el.classList.toggle("sitout", seat.state==="sitout");
         el.classList.toggle("folded", seat.in_hand===0 && seat.user_id!=null);
 
-        // avatar: prikazi player img kad je occupied
         const ph = $(".avatar.placeholder", el);
         const pl = $(".avatar.player", el);
         if (seat.user_id!=null){ if(pl) pl.style.display="block"; if(ph) ph.style.display="none"; }
         else { if(pl) pl.style.display="none"; if(ph) ph.style.display="block"; }
 
-        // stack
-        const stk = $(".stack", el); if (stk) stk.textContent = `${seat.stack_s|0}s`;
+        const stk = $(".stack", el); if (stk) stk.textContent = \`\${seat.stack_s|0}s\`;
 
-        // timer ring (CSS var --p)
         const isTurn = acting===seat.seat_index;
         el.classList.toggle("turn", isTurn);
         const pct = isTurn && t.turn_timer_s ? Math.max(0, Math.min(100, 100*msLeft/(t.turn_timer_s*1000))) : 0;
-        el.style.setProperty("--p", `${pct}%`);
+        el.style.setProperty("--p", \`\${pct}%\`);
       });
 
-      // BTN / SB / BB bedževi — iz posljednje ruke (ako postoji)
-      const last = window.Store.lastHandFromState || {};
-      for (let i=0;i<(t.seats||9);i++){
-        setBadges(i, last.btn_seat, last.sb_seat, last.bb_seat);
-      }
+      // BTN/SB/BB iz zadnje ruke
+      const last = Store.lastHandFromState || {};
+      for (let i=0;i<(t.seats||9);i++) setBadges(i, last.btn_seat, last.sb_seat, last.bb_seat);
 
-      // Info traka (pot amount je placeholder ovdje)
-      $("#turn-label")?.textContent = (acting!=null) ? `Action: seat ${acting}` : "Waiting for players…";
+      $("#turn-label").textContent = (acting!=null) ? \`Action: seat \${acting}\` : "Waiting for players…";
     }
-
-    // Prvo dohvatimo snapshot (GET /state), spremimo hand info (btn/sb/bb)
-    (async function init(){
-      try{
-        const st = await window.Net.requestState(TABLE_ID);
-        if (st?.hand) window.Store.lastHandFromState = st.hand;
-        // injektiraj kao table_state da Store pokrene cycle
-        window.Store.emit("table_state", st);
-        render();
-      }catch(e){
-        setHeaderStatus(e.message || "Failed to load state.");
-      }
-    })();
-
-    // Re-render na svaku promjenu Store-a
     document.addEventListener("store:update", render);
 
-    // ==== ACTION PANEL HOOKS (minimalno) ====
+    // ---------- Auth ----------
+    const auth = {
+      show(){ $("#auth-overlay").style.display="grid"; $("#auth-msg").textContent=""; },
+      hide(){ $("#auth-overlay").style.display="none"; },
+      async me(){
+        try{
+          const r = await fetch("/api/me",{credentials:"include"});
+          if(!r.ok) return null;
+          const j = await r.json().catch(()=>null);
+          return j?.user || null;
+        }catch{ return null; }
+      },
+      async login(email, password){
+        return api("/api/login",{method:"POST", body:JSON.stringify({email,password})});
+      },
+      async register(email, password){
+        return api("/api/register",{method:"POST", body:JSON.stringify({email,password})});
+      }
+    };
+    $("#auth-login").onclick = async ()=>{
+      try{
+        const email=$("#auth-email").value, pass=$("#auth-pass").value;
+        await auth.login(email,pass);
+        $("#auth-msg").textContent="Logged in.";
+        auth.hide();
+        const me = await auth.me(); if(me){ window.__ME = me.id; window.__ME_EMAIL = me.email; }
+        await loadState(); render();
+      }catch(e){ $("#auth-msg").textContent = e.message; }
+    };
+    $("#auth-register").onclick = async ()=>{
+      try{
+        const email=$("#auth-email").value, pass=$("#auth-pass").value;
+        await auth.register(email,pass);
+        $("#auth-msg").textContent="Registered. Now click Login.";
+      }catch(e){ $("#auth-msg").textContent = e.message; }
+    };
+
+    // ---------- Buy-in ----------
+    let pendingSeat = null;
+    function showBuyin(){
+      const S = Store.get(); const t=S.table;
+      if (!t) return;
+      $("#buyin-info").textContent = \`Min/Max: \${t.min_buyin_bb}–\${t.max_buyin_bb} BB (BB=\${t.bb_s})\`;
+      const inp = $("#buyin-bb");
+      inp.value = t.min_buyin_bb; inp.min=t.min_buyin_bb; inp.max=t.max_buyin_bb;
+      $("#buyin-msg").textContent="";
+      $("#buyin-overlay").style.display="grid";
+    }
+    function hideBuyin(){
+      $("#buyin-overlay").style.display="none";
+      pendingSeat=null;
+    }
+    $("#buyin-cancel").onclick = ()=> hideBuyin();
+    $("#buyin-ok").onclick = async ()=>{
+      try{
+        const bb = Math.max(parseInt($("#buyin-bb").value||"0",10)||0, 1);
+        const S = Store.get(); const tid = S.table?.id || TABLE_ID;
+        await api(\`/api/poker/table/\${tid}/join\`, {
+          method:"POST",
+          body: JSON.stringify({ buyin_bb: bb, seat_index: pendingSeat }),
+        });
+        hideBuyin();
+        await loadState(); render();
+      }catch(e){ $("#buyin-msg").textContent = e.message||"Join failed"; }
+    };
+
+    // klik na prazno mjesto → ako nije logovan → auth; nakon logina ponovo buyin
+    function wireSeatClicks(){
+      $$(".seat").forEach(el=>{
+        el.addEventListener("click", async ()=>{
+          const idx = parseInt(el.dataset.i,10);
+          const S = Store.get();
+          const seat = (S.seats||[]).find(s=>s.seat_index===idx);
+          if (!seat || seat.user_id!=null) return; // zauzeto
+          const me = await auth.me();
+          if (!me){ auth.show(); return; }
+          window.__ME = me.id; window.__ME_EMAIL = me.email;
+          pendingSeat = idx;
+          showBuyin();
+        });
+      });
+    }
+
+    // ---------- Action panel ----------
     function mySeatIndex(){
-      const S = window.Store.get();
+      const S = Store.get();
       const meId = window.__ME || null;
       const m = (S.seats||[]).find(s=> s.user_id!=null && s.user_id===meId);
       return m ? m.seat_index : null;
@@ -281,8 +401,22 @@
     });
     $("#btn-allin").addEventListener("click", ()=>{ const s=mySeatIndex(); if(s!=null) UI.allin(TABLE_ID, s); });
 
-    // Saznaj user id (ako je logiran) radi mySeatIndex()
-    fetch("/api/me",{credentials:"include"}).then(r=>r.json().catch(()=>null)).then(j=>{ if(j?.user?.id) window.__ME = j.user.id; });
+    // ---------- Boot ----------
+    (async function boot(){
+      const me = await auth.me();
+      if (me){ window.__ME = me.id; window.__ME_EMAIL = me.email; }
+      await loadState();
+      render();
+      wireSeatClicks();
+      // timer tick (smanjuje prsten)
+      function tick(){
+        const a = Store.state.acting;
+        if (a.deadline>0){ a.ms_left = Math.max(0, a.deadline - Date.now()); document.dispatchEvent(new Event("store:update")); }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+  })();
   </script>
 </body>
 </html>
