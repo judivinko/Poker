@@ -1,8 +1,3 @@
-// POKER • Full Server (Express + WebSocket + better-sqlite3)
-// ============================================================================
-// SVE RUTE (index + admin) + WS seat guard + cleanup '0*' slika u /public
-// ============================================================================
-
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -14,54 +9,46 @@ const jwt = require("jsonwebtoken");
 const { WebSocketServer } = require("ws");
 const { parse: parseCookie } = require("cookie");
 
-// ----------------- CONFIG -----------------
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const ENV = process.env.NODE_ENV || "development";
+const IS_PROD = ENV === "production";
 
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-in-prod";
 const TOKEN_NAME = "token";
 const ADMIN_KEY = process.env.ADMIN_KEY || "set-admin-key";
 
-// Poker defaults
 const TURN_TIMER_S = parseInt(process.env.TURN_TIMER_S || "15", 10);
 const TIMEBANK_S = parseInt(process.env.TIMEBANK_S || "90", 10);
-const DEFAULT_RAKE_PCT = parseInt(process.env.RAKE_PCT || "1", 10); // 1%
-const DEFAULT_RAKE_CAP_S = parseInt(process.env.RAKE_CAP_S || "300", 10); // 3g (300s)
+const DEFAULT_RAKE_PCT = parseInt(process.env.RAKE_PCT || "1", 10);
+const DEFAULT_RAKE_CAP_S = parseInt(process.env.RAKE_CAP_S || "300", 10);
 
-// Paths
 const ROOT = __dirname;
 const PUB = path.join(ROOT, "public");
-const IMG_ROOT = PUB; // slike su direktno u /public
+const IMG_ROOT = PUB;
 
-// DB file
 const DB_FILE = process.env.DB_PATH || path.join(ROOT, "data", "poker.db");
 fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
 fs.mkdirSync(PUB, { recursive: true });
 
-// ----------------- APP -----------------
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
-globalThis.wss = wss;
 
 app.set("trust proxy", 1);
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(PUB));
 
-// Minimal home
 app.get("/", (_req, res) => {
   const idx = path.join(PUB, "index.html");
   if (fs.existsSync(idx)) res.sendFile(idx);
   else res.type("text").send("Poker server ready. Put your /public files.");
 });
 
-// ----------------- DB -----------------
 const db = new Database(DB_FILE);
 db.pragma("journal_mode = WAL");
 
-// ----------------- HELPERS -----------------
 const nowISO = () => new Date().toISOString();
 const isEmail = (x)=> typeof x==="string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x);
 const isPass  = (x)=> typeof x==="string" && x.length>=6;
@@ -87,7 +74,6 @@ function requireAdminKey(req, res, next){
   next();
 }
 
-// ----------------- MIGRATIONS -----------------
 function ensure(sql){ db.exec(sql); }
 ensure(`
 CREATE TABLE IF NOT EXISTS users(
@@ -124,7 +110,7 @@ CREATE TABLE IF NOT EXISTS poker_seats(
   seat_index INTEGER NOT NULL,
   user_id INTEGER,
   stack_s INTEGER NOT NULL DEFAULT 0,
-  state TEXT NOT NULL DEFAULT 'empty', -- empty|reserved|occupied|sitout|leaving
+  state TEXT NOT NULL DEFAULT 'empty',
   in_hand INTEGER NOT NULL DEFAULT 0,
   last_action TEXT,
   UNIQUE(table_id, seat_index)
@@ -176,7 +162,7 @@ CREATE TABLE IF NOT EXISTS poker_buyins(
   table_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   amount_s INTEGER NOT NULL,
-  type TEXT NOT NULL, -- buyin|rebuy|cashout
+  type TEXT NOT NULL,
   created_at TEXT NOT NULL
 );`);
 ensure(`
@@ -206,7 +192,6 @@ CREATE TABLE IF NOT EXISTS user_recipes(
   qty INTEGER NOT NULL DEFAULT 1
 );`);
 
-// Seed jedan stol & seats (9-max 1/2)
 (function seedTable(){
   const any = db.prepare("SELECT id FROM poker_tables LIMIT 1").get();
   if (!any){
@@ -221,7 +206,6 @@ CREATE TABLE IF NOT EXISTS user_recipes(
   }
 })();
 
-// ----------------- IMAGE CLEANUP (delete files starting with '0') -----------------
 function deleteZeroPrefixedImages(dir) {
   try{
     if (!fs.existsSync(dir)) return;
@@ -242,7 +226,6 @@ function deleteZeroPrefixedImages(dir) {
 }
 deleteZeroPrefixedImages(IMG_ROOT);
 
-// ----------------- GAME (deck/evaluator/engine) -----------------
 const SUITS = ["S","H","D","C"];
 const RANKS = ["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
 const RVAL = Object.fromEntries(RANKS.map((r,i)=>[r, 14 - i]));
@@ -273,12 +256,10 @@ function handRank5(cards){
 function cmpRank(a,b){ const L=Math.max(a.length,b.length); for(let i=0;i<L;i++){ const va=a[i]??0, vb=b[i]??0; if (va>vb) return 1; if (va<vb) return -1; } return 0; }
 function best5of7(seven){ let best=null; for (const five of combos5(seven)){ const rank=handRank5(five); if (!best || cmpRank(rank,best)>0){ best=rank; } } return { rank:best }; }
 
-// Runtime
-const RT = new Map(); // tableId -> { ... }
+const RT = new Map();
 
 function tableRow(tableId){ return db.prepare("SELECT * FROM poker_tables WHERE id=?").get(tableId); }
 function tableSeats(tableId){ return db.prepare("SELECT * FROM poker_seats WHERE table_id=? ORDER BY seat_index").all(tableId); }
-function occupiedSeats(tableId){ return db.prepare("SELECT * FROM poker_seats WHERE table_id=? AND user_id IS NOT NULL AND state IN ('occupied','sitout') ORDER BY seat_index").all(tableId); }
 function activePlayers(tableId){ return db.prepare("SELECT seat_index,stack_s,user_id,state FROM poker_seats WHERE table_id=? AND user_id IS NOT NULL AND state='occupied' AND stack_s>0").all(tableId); }
 function writeSeat(seat){ db.prepare("UPDATE poker_seats SET user_id=?, stack_s=?, state=?, in_hand=?, last_action=? WHERE id=?").run(seat.user_id, seat.stack_s, seat.state, seat.in_hand, seat.last_action, seat.id); }
 function nextOccupiedIndex(list, start, seatsCount){ if (!list.length) return -1; for (let k=1;k<=seatsCount;k++){ const idx=(start+k)%seatsCount; if (list.some(s=>s.seat_index===idx)) return idx; } return -1; }
@@ -324,7 +305,6 @@ function startIfCan(tableId){
   const deck = shuffle(deck52());
   const handNo = (db.prepare("SELECT COALESCE(MAX(hand_no),0)+1 AS n FROM hands WHERE table_id=?").get(tableId).n)|0;
 
-  // mark in_hand
   const seats = tableSeats(tableId);
   for (const s of seats){
     if (s.user_id && s.state==="occupied" && s.stack_s>0){ s.in_hand=1; writeSeat(s); }
@@ -355,7 +335,6 @@ function startIfCan(tableId){
     timers: { deadline: 0, handle: null, timebank: new Map() }
   });
 
-  // BTN next
   db.prepare("UPDATE poker_tables SET btn_pos=? WHERE id=?").run(bb, tableId);
 
   const first = nextOccupiedIndex(occ, bb, seatsCount);
@@ -574,7 +553,6 @@ function applyAction(tableId, seatIndex, action, amountS, auto=false){
   return { ok:false, error:"Unknown action" };
 }
 
-// ----------------- AUTH -----------------
 app.post("/api/register", async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -598,12 +576,12 @@ app.post("/api/login", async (req, res) => {
     const ok = bcrypt.compareSync(password || "", u.pass_hash);
     if (!ok) return res.status(401).json({ ok:false, error:"Wrong password" });
     const token = signToken(u);
-    res.cookie(TOKEN_NAME, token, { httpOnly:true, sameSite:"lax", secure:false, path:"/", maxAge: 7*24*3600*1000 });
+    res.cookie(TOKEN_NAME, token, { httpOnly:true, sameSite:"lax", secure:IS_PROD, path:"/" });
     db.prepare("UPDATE users SET last_seen=? WHERE id=?").run(nowISO(), u.id);
     res.json({ ok:true, user:{ id:u.id, email:u.email, gold:sToG(u.balance_silver), silver: u.balance_silver%100 } });
   } catch { res.status(500).json({ ok:false, error:"Login failed" }); }
 });
-app.get("/api/logout", (req, res) => { res.clearCookie(TOKEN_NAME, { httpOnly:true, sameSite:"lax", secure:false, path:"/" }); res.json({ ok:true }); });
+app.get("/api/logout", (req, res) => { res.clearCookie(TOKEN_NAME, { httpOnly:true, sameSite:"lax", secure:IS_PROD, path:"/" }); res.json({ ok:true }); });
 app.get("/api/me", (req,res)=>{
   const tok = readToken(req);
   if (!tok) return res.status(401).json({ ok:false });
@@ -612,9 +590,7 @@ app.get("/api/me", (req,res)=>{
   res.json({ ok:true, user:{ id:u.id, email:u.email, is_admin:!!u.is_admin, gold:sToG(u.balance_silver), silver:u.balance_silver%100 } });
 });
 
-// ----------------- ADMIN (guards + routes koje UI očekuje) -----------------
 app.get("/api/admin/ping", requireAdminKey, (_req,res)=> res.json({ ok:true }));
-
 app.get("/api/admin/users", requireAdminKey, (_req,res)=>{
   const rows = db.prepare("SELECT id,email,is_admin,is_disabled,balance_silver,created_at,last_seen FROM users").all();
   const users = rows.map(u=>({ id:u.id,email:u.email,is_admin:!!u.is_admin,is_disabled:!!u.is_disabled, gold:sToG(u.balance_silver), silver:u.balance_silver%100, created_at:u.created_at, last_seen:u.last_seen }));
@@ -684,7 +660,6 @@ app.post("/api/admin/cleanup-images", requireAdminKey, (_req,res)=>{
   res.json({ ok:true, cleaned:true });
 });
 
-// ----------------- LOBBY / TABLES -----------------
 app.get("/api/poker/lobby", (_req,res)=>{
   const rows = db.prepare(`
     SELECT t.*,
@@ -823,7 +798,6 @@ app.post("/api/poker/table/:id/leave", (req,res)=>{
   }catch(e){ res.status(400).json({ ok:false, error:String(e.message||e) }); }
 });
 
-// ----------------- HEALTH / METRICS -----------------
 app.get("/health", (_req,res)=> res.json({ ok:true, ts:Date.now() }));
 app.get("/metrics", (_req,res)=>{
   const tables = db.prepare("SELECT COUNT(*) c FROM poker_tables").get().c|0;
@@ -831,7 +805,6 @@ app.get("/metrics", (_req,res)=>{
   res.json({ ok:true, tables, hands, ts:Date.now() });
 });
 
-// ----------------- WEBSOCKET (seat ownership guard) -----------------
 function wsUserIdFromReq(req){
   try{
     const cookies = parseCookie(req.headers.cookie || "");
@@ -841,8 +814,8 @@ function wsUserIdFromReq(req){
   }catch{ return null; }
 }
 wss.on("connection", (ws, req)=>{
-  ws.uid = wsUserIdFromReq(req); // null ako nije logovan
-  send(ws,"connection_open",{ ts:Date.now(), env:ENV, uid: ws.uid||null });
+  ws.uid = wsUserIdFromReq(req) || null;
+  send(ws,"connection_open",{ ts:Date.now(), env:ENV, uid: ws.uid });
   ws.on("message", raw=>{
     let msg; try{ msg=JSON.parse(raw.toString()); }catch{ return send(ws,"error",{code:"BAD_JSON"}); }
     const { type, payload } = msg||{};
@@ -858,7 +831,6 @@ wss.on("connection", (ws, req)=>{
   });
 });
 
-// ----------------- START -----------------
 server.listen(PORT, HOST, () => {
   console.log(`POKER server listening at http://${HOST}:${PORT}`);
 });
