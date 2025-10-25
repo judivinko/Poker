@@ -1,1 +1,294 @@
+{
+  "name": "TexasHoldemBackend",
+  "version": "1.0.0",
+  "baseUrl": "/api",
+  "auth": {
+    "type": "cookieJWT",
+    "cookieName": "token"
+  },
+  "models": {
+    "User": {
+      "id": "number",
+      "email": "string",
+      "is_admin": "boolean",
+      "is_disabled": "boolean",
+      "balance_silver": "number",
+      "gold": "computed: balance_silver/100",
+      "silver": "computed: balance_silver%100",
+      "created_at": "iso-datetime",
+      "last_seen": "iso-datetime"
+    },
+    "PokerTable": {
+      "id": "number",
+      "name": "string",
+      "seats": "number (6|9)",
+      "sb_s": "number",
+      "bb_s": "number",
+      "min_buyin_bb": "number",
+      "max_buyin_bb": "number",
+      "turn_timer_s": "number",
+      "timebank_s": "number",
+      "rake_pct": "number",
+      "rake_cap_s": "number",
+      "status": "string (waiting|running|paused)",
+      "btn_pos": "number",
+      "created_at": "iso-datetime"
+    },
+    "Seat": {
+      "table_id": "number",
+      "seat_index": "number",
+      "user_id": "number|null",
+      "stack_s": "number",
+      "state": "string (empty|reserved|occupied|sitout|leaving)",
+      "in_hand": "0|1",
+      "last_action": "string|null"
+    },
+    "Hand": {
+      "id": "number",
+      "table_id": "number",
+      "hand_no": "number",
+      "btn_seat": "number",
+      "sb_seat": "number",
+      "bb_seat": "number",
+      "state": "string (preflop|flop|turn|river|showdown|paid)",
+      "deck_json": "string[] as JSON",
+      "board": "comma-separated cards e.g. 'AH,KC,QS'",
+      "started_at": "iso-datetime",
+      "ended_at": "iso-datetime|null"
+    },
+    "HandAction": {
+      "hand_id": "number",
+      "seat_index": "number",
+      "street": "string (preflop|flop|turn|river)",
+      "action": "string (fold|check|call|bet|raise|allin|post_sb|post_bb|deal:RS,RS)",
+      "amount_s": "number",
+      "at": "iso-datetime"
+    },
+    "Pot": {
+      "hand_id": "number",
+      "pot_index": "number",
+      "amount_s": "number"
+    },
+    "Payout": {
+      "hand_id": "number",
+      "pot_index": "number",
+      "seat_index": "number",
+      "amount_s": "number",
+      "reason": "string (win|split|rake)"
+    },
+    "Buyin": {
+      "table_id": "number",
+      "user_id": "number",
+      "amount_s": "number",
+      "type": "string (buyin|rebuy|cashout)",
+      "created_at": "iso-datetime"
+    }
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/register",
+      "body": { "email": "string", "password": "string>=6" },
+      "response": { "ok": "boolean" }
+    },
+    {
+      "method": "POST",
+      "path": "/login",
+      "body": { "email": "string", "password": "string" },
+      "response": {
+        "ok": "boolean",
+        "user": { "$ref": "User", "fields": ["id","email","gold","silver"] }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/logout",
+      "response": { "ok": "boolean" }
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "auth": true,
+      "response": { "ok": "boolean", "user": { "$ref": "User", "fields": ["id","email","is_admin","gold","silver"] } }
+    },
+
+    {
+      "group": "Admin",
+      "method": "GET",
+      "path": "/admin/ping",
+      "response": { "ok": "boolean" }
+    },
+    {
+      "group": "Admin",
+      "method": "GET",
+      "path": "/admin/users",
+      "response": {
+        "ok": "boolean",
+        "users": [
+          { "id":"number","email":"string","is_admin":"boolean","is_disabled":"boolean","gold":"number","silver":"number","created_at":"iso-datetime","last_seen":"iso-datetime" }
+        ]
+      }
+    },
+    {
+      "group": "Admin",
+      "method": "POST",
+      "path": "/admin/adjust-balance",
+      "body": { "email":"string","gold":"number(optional)","silver":"number(optional)","delta_silver":"number(optional)" },
+      "response": { "ok":"boolean","balance_silver":"number" }
+    },
+    {
+      "group": "Admin",
+      "method": "POST",
+      "path": "/admin/disable-user",
+      "body": { "email":"string","disabled":"boolean" },
+      "response": { "ok":"boolean" }
+    },
+
+    {
+      "group": "Lobby",
+      "method": "GET",
+      "path": "/poker/lobby",
+      "response": {
+        "ok": "boolean",
+        "tables": [
+          { "$ref": "PokerTable", "plus": { "players": "number (occupied seats)" } }
+        ]
+      }
+    },
+
+    {
+      "group": "Table",
+      "method": "GET",
+      "path": "/poker/table/{id}/state",
+      "params": { "id":"number" },
+      "response": {
+        "ok":"boolean",
+        "table": { "$ref": "PokerTable" },
+        "seats": [ { "$ref":"Seat", "fields":["seat_index","user_id","stack_s","state","in_hand","last_action"] } ],
+        "hand": { "$ref":"Hand", "nullable": true }
+      }
+    },
+    {
+      "group": "Table",
+      "method": "POST",
+      "path": "/poker/table/{id}/join",
+      "auth": true,
+      "params": { "id":"number" },
+      "body": { "buyin_bb":"number","seat_index":"number|optional" },
+      "response": { "ok":"boolean","seat_index":"number","stack_s":"number","balance_silver":"number" }
+    },
+    {
+      "group": "Table",
+      "method": "POST",
+      "path": "/poker/table/{id}/rebuy",
+      "auth": true,
+      "params": { "id":"number" },
+      "body": { "buyin_bb":"number" },
+      "response": { "ok":"boolean","seat_index":"number","stack_s":"number","balance_silver":"number" }
+    },
+    {
+      "group": "Table",
+      "method": "POST",
+      "path": "/poker/table/{id}/sitout",
+      "auth": true,
+      "params": { "id":"number" },
+      "response": { "ok":"boolean" }
+    },
+    {
+      "group": "Table",
+      "method": "POST",
+      "path": "/poker/table/{id}/sitin",
+      "auth": true,
+      "params": { "id":"number" },
+      "response": { "ok":"boolean" }
+    },
+    {
+      "group": "Table",
+      "method": "POST",
+      "path": "/poker/table/{id}/leave",
+      "auth": true,
+      "params": { "id":"number" },
+      "response": { "ok":"boolean","returned_s":"number","balance_silver":"number" }
+    }
+  ],
+  "websocket": {
+    "url": "ws(s)://{host}/",
+    "clientMessages": [
+      {
+        "type": "ping",
+        "payload": {}
+      },
+      {
+        "type": "player_action",
+        "payload": {
+          "table_id": "number",
+          "seat_index": "number",
+          "action": "string (fold|check|call|bet|raise|allin)",
+          "amount_s": "number (only for bet/raise/allin)"
+        }
+      }
+    ],
+    "serverMessages": [
+      { "type": "connection_open", "fields": { "ts":"number","env":"string" } },
+      { "type": "pong", "fields": { "ts":"number" } },
+      {
+        "type": "lobby_update",
+        "fields": { "tables": [ { "$ref":"PokerTable", "plus":{"players":"number"} } ] }
+      },
+      {
+        "type": "table_state",
+        "fields": {
+          "table_id":"number",
+          "table": { "$ref":"PokerTable" },
+          "seats": [ { "$ref":"Seat", "fields":["seat_index","user_id","stack_s","state","in_hand","last_action"] } ]
+        }
+      },
+      {
+        "type": "action_required",
+        "fields": {
+          "table_id":"number",
+          "seat_index":"number",
+          "ms_left":"number",
+          "timebank_left_s":"number|optional"
+        }
+      },
+      {
+        "type": "player_action",
+        "fields": {
+          "table_id":"number",
+          "seat_index":"number",
+          "action":"string",
+          "amount_s":"number|optional",
+          "auto":"boolean|optional"
+        }
+      },
+      {
+        "type": "board_update",
+        "fields": { "table_id":"number", "board":"string[] of cards e.g. [\"AS\",\"KD\",\"QH\"]" }
+      },
+      {
+        "type": "showdown",
+        "fields": {
+          "table_id":"number",
+          "board":"string[]",
+          "results":[ { "pot":"number","seat_index":"number","amount_s":"number" } ]
+        }
+      },
+      {
+        "type": "payouts",
+        "fields": { "table_id":"number", "payouts":[ { "seat_index":"number","amount_s":"number" } ] }
+      },
+      { "type": "error", "fields": { "code":"string", "message":"string|optional" } }
+    ]
+  },
+  "businessRules": {
+    "buyin": "min_buyin_bb..max_buyin_bb (x BB_s)",
+    "turnTimer": "turn_timer_s per action + personal timebank timebank_s",
+    "autoActionOnTimeout": "auto-check if call=0 else auto-fold",
+    "minRaise": "at least previous raise size; first bet sets minRaise=bet size",
+    "rake": "rake_pct% of total pots with cap rake_cap_s",
+    "sidePots": "computed from total contributions; split supported",
+    "startHand": "needs >=2 occupied players with stack>0"
+  }
+}
 
