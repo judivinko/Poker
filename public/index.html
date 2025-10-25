@@ -1,302 +1,387 @@
 <!doctype html>
-<html lang="hr">
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>POKER</title>
-  <style>
-    :root{ --bg:#0b1220; --card:#121a2b; --line:#233047; --text:#e5e7eb; --muted:#9aa4b2; --ok:#10b981; --bad:#ef4444; --btn:#2563eb; }
-    *{ box-sizing:border-box } body{ margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial }
-    .wrap{ max-width:980px; margin:0 auto; padding:16px }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:12px 0 }
-    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
-    .col{ display:flex; flex-direction:column; gap:8px }
-    input,select{ background:#0f172a; border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:10px; width:100% }
-    button{ background:var(--btn); color:#fff; border:0; padding:10px 14px; border-radius:10px; cursor:pointer }
-    button.ghost{ background:transparent; border:1px solid var(--line) }
-    .muted{ color:var(--muted) } .right{ margin-left:auto } .hidden{ display:none }
-    table{ width:100%; border-collapse:collapse } th,td{ padding:8px 10px; border-bottom:1px solid var(--line); text-align:left }
-    .pill{ padding:3px 8px; border-radius:999px; background:#0f1b34; border:1px solid var(--line); font-weight:600 }
-    .ok{ color:var(--ok) } .bad{ color:var(--bad) }
-    .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px } @media(max-width:900px){ .grid2{ grid-template-columns:1fr } }
-    #toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:16px; background:#111827; color:#fff; padding:10px 14px; border-radius:10px; border:1px solid var(--line) }
-    #board{ display:flex; gap:8px } .cardimg{ width:56px; height:76px; background:#0f172a; border:1px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700 }
-    .seat{ padding:10px; border:1px solid var(--line); border-radius:10px; background:#0f172a }
-    .seat.me{ outline:2px solid var(--ok) }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>POKER</title>
+<style>
+  :root{
+    --bg:#0c1117; --panel:#121826; --soft:#1b2436; --accent:#4b9cff; --ok:#3ecf8e; --bad:#ff6b6b; --text:#e8eef6;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% 0%, #101726, #0a0f17 60%, #05080e 100%);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{max-width:1100px;margin:18px auto;padding:0 12px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;background:var(--panel);padding:10px 12px;border-radius:12px;border:1px solid #26324b}
+  .muted{opacity:.7}
+  button,.btn{background:#1e293b;border:1px solid #2f3e5e;color:var(--text);padding:8px 12px;border-radius:10px;cursor:pointer}
+  button:hover{filter:brightness(1.1)}
+  input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2f3e5e;background:#111827;color:var(--text)}
+  .grid{display:grid;gap:12px}
+  .cols-2{grid-template-columns:1.2fr .8fr}
+  .panel{background:var(--panel);border:1px solid #26324b;border-radius:14px;padding:12px}
+
+  /* TABLE AREA */
+  .tableWrap{position:relative;aspect-ratio:16/9;background:#09101c;border-radius:16px;border:1px solid #26324b;overflow:hidden}
+  .felt{position:absolute;inset:0;background:url("poker_table.png") center/contain no-repeat, radial-gradient(200px 100px at 50% 50%, #144d3f, #0b2d25 60%, #071b16 100%)}
+  .board{position:absolute;left:50%;top:36%;transform:translateX(-50%);display:flex;gap:8px}
+  .card{width:56px;height:78px;border-radius:6px;background:#fff url("card_front_blank.png") center/cover no-repeat;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+  .seat{position:absolute;width:160px;padding:8px;border-radius:12px;background:rgba(10,16,28,.65);border:1px solid #2a3857;backdrop-filter: blur(2px)}
+  .seat .name{font-weight:600}
+  .seat .stack{opacity:.8}
+  .seat .state{opacity:.6}
+  .seat .badge{display:inline-block;padding:2px 6px;border-radius:8px;background:#25314d;margin-left:6px;font-size:12px}
+  .acting{outline:2px solid #ffd166; box-shadow:0 0 0 4px rgba(255,209,102,.2)}
+  .dealer{position:absolute;right:-10px;top:-10px;width:28px;height:28px;border-radius:50%;background:#fff url("dealer_button.png") center/75% no-repeat;box-shadow:0 2px 8px rgba(0,0,0,.6)}
+  .pot{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);padding:6px 10px;border-radius:10px;background:#0f1729d9;border:1px solid #2a3857}
+
+  /* SEAT POSITIONS (9-max) – centered around table image */
+  /* index: 0 top-center, then clockwise like PokerStars layout */
+  .s0{left:50%;top:6%;transform:translate(-50%,0)}
+  .s1{right:9%;top:18%}
+  .s2{right:2%;top:40%}
+  .s3{right:10%;bottom:18%}
+  .s4{left:50%;bottom:6%;transform:translate(-50%,0)}
+  .s5{left:10%;bottom:18%}
+  .s6{left:2%;top:40%}
+  .s7{left:9%;top:18%}
+  .s8{left:50%;top:22%;transform:translate(-50%,0)}
+
+  /* RIGHT PANEL */
+  .controls{display:grid;gap:10px}
+  .row{display:flex;gap:8px}
+  .row>.grow{flex:1}
+  .big{font-size:18px;font-weight:700}
+  .btn-ok{background:#134e4a;border-color:#175e58}
+  .btn-bad{background:#5a1f25;border-color:#7a2b33}
+  .btn-warn{background:#50340d;border-color:#6b4512}
+  .note{font-size:12px;opacity:.8}
+  hr{border:none;border-top:1px solid #26324b;margin:4px 0 10px}
+  .pill{padding:4px 8px;border-radius:999px;background:#243049;border:1px solid #2e3d5d;display:inline-block}
+  .hidden{display:none !important}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>POKER</h1>
+<div class="wrap">
 
-    <!-- AUTH -->
-    <div id="auth" class="card">
-      <div class="grid2">
-        <div>
-          <h3>Prijava</h3>
-          <div class="col">
-            <input id="login-email" type="email" placeholder="Email" />
-            <input id="login-pass" type="password" placeholder="Lozinka" />
-            <div class="row">
-              <button id="btn-login">Login</button>
-              <span id="login-msg" class="muted"></span>
-            </div>
-          </div>
-        </div>
-        <div>
-          <h3>Registracija</h3>
-          <div class="col">
-            <input id="reg-email" type="email" placeholder="Email" />
-            <input id="reg-pass" type="password" placeholder="Lozinka (min 6)" />
-            <input id="reg-nick" type="text" placeholder="Nickname (3–16, A-Z 0-9 _ . -)" />
-            <div class="row">
-              <button id="btn-register">Kreiraj račun</button>
-              <span id="reg-msg" class="muted"></span>
-            </div>
-          </div>
-        </div>
-      </div>
+  <div class="topbar">
+    <div id="userBar" class="muted">Niste prijavljeni</div>
+    <div class="row">
+      <button id="btnShowLogin">Login</button>
+      <button id="btnLogout" class="hidden">Logout</button>
     </div>
-
-    <!-- DASH -->
-    <div id="dash" class="card hidden">
-      <div class="row">
-        <div><b id="user-email"></b> <span class="muted">(<span id="user-nick"></span>)</span></div>
-        <div class="pill">Chips: <span id="user-gold">0</span>g <span id="user-silver">0</span>s</div>
-        <button id="btn-logout" class="right ghost">Logout</button>
-      </div>
-    </div>
-
-    <!-- LOBBY -->
-    <div id="lobby" class="card hidden">
-      <div class="row">
-        <h3 style="margin:0">Lobby</h3>
-        <button id="btn-refresh" class="right ghost">Osvježi</button>
-      </div>
-      <table id="tbl-lobby">
-        <thead><tr><th>Stol</th><th>Seats</th><th>Blinds</th><th>Buy-in (BB)</th><th>Igrača</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-
-    <!-- TABLE -->
-    <div id="table" class="card hidden">
-      <div class="row">
-        <h3 id="t-name" style="margin:0">Stol</h3>
-        <span class="muted" id="t-blinds"></span>
-        <span class="pill" id="t-state"></span>
-        <button id="btn-back" class="right ghost">← Lobby</button>
-      </div>
-
-      <div class="grid2">
-        <div class="col">
-          <div id="board" class="row"></div>
-          <div id="seats" class="col"></div>
-        </div>
-        <div class="col">
-          <div class="card">
-            <div class="row">
-              <input id="inp-buyin" type="number" placeholder="Buy-in u BB (npr. 50)" />
-              <input id="inp-seat" type="number" placeholder="Seat index (0-8)" />
-              <button id="btn-join">Join</button>
-              <button id="btn-rebuy" class="ghost">Rebuy</button>
-              <button id="btn-leave" class="ghost">Leave</button>
-            </div>
-          </div>
-          <div class="card">
-            <div class="row">
-              <button data-act="check" class="ghost">Check</button>
-              <button data-act="call"  class="ghost">Call</button>
-              <input id="inp-bet" type="number" placeholder="Iznos (s)" />
-              <button data-act="bet">Bet</button>
-              <button data-act="raise">Raise</button>
-              <button data-act="fold" class="ghost">Fold</button>
-              <button data-act="allin" class="bad">All-in</button>
-            </div>
-            <div class="muted" id="act-hint"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="toast" class="hidden"></div>
   </div>
 
+  <div class="grid cols-2" style="margin-top:12px">
+    <!-- LEFT: TABLE -->
+    <div class="panel tableWrap">
+      <div class="felt"></div>
+
+      <div id="pot" class="pot hidden">Pot: 0s</div>
+      <div id="board" class="board"></div>
+
+      <!-- 9 seats -->
+      <template id="seatTpl">
+        <div class="seat">
+          <div class="dealer hidden"></div>
+          <div class="name">Seat</div>
+          <div class="stack">Stack: 0g 0s</div>
+          <div class="state muted">empty</div>
+        </div>
+      </template>
+      <div id="seats"></div>
+    </div>
+
+    <!-- RIGHT: CONTROLS -->
+    <div class="panel">
+      <div id="tableHeader" class="row" style="align-items:center;justify-content:space-between">
+        <div>
+          <div class="big" id="tableName">–</div>
+          <div class="muted" id="tableBlinds"></div>
+        </div>
+        <div><span id="tableStatus" class="pill">waiting</span></div>
+      </div>
+      <hr/>
+
+      <div class="controls">
+        <div class="row">
+          <input id="buyinBB" class="grow" placeholder="Buy-in u BB (npr. 50)"/>
+          <input id="seatIdx" style="width:120px" placeholder="Seat index (0-8)"/>
+        </div>
+        <div class="row">
+          <button id="btnJoin">Join</button>
+          <button id="btnRebuy">Rebuy</button>
+          <button id="btnLeave" class="btn-bad">Leave</button>
+        </div>
+
+        <hr/>
+
+        <div class="row">
+          <button id="btnCheck">Check</button>
+          <button id="btnCall">Call</button>
+        </div>
+        <div class="row">
+          <input id="amountS" class="grow" placeholder="Iznos (silver) – npr. 200"/>
+        </div>
+        <div class="row">
+          <button id="btnBet" class="btn-ok">Bet</button>
+          <button id="btnRaise" class="btn-warn">Raise</button>
+          <button id="btnFold" class="btn-bad">Fold</button>
+          <button id="btnAllin" class="btn-bad">All-In</button>
+        </div>
+
+        <div class="note">
+          • 1 gold = 100 silver • SB/BB su u silveru u backendu (npr. BB 200s = 2g) • Hand starta kad su min. 2 **occupied** igrača sa stackom.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN MODAL -->
+<div id="modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center">
+  <div class="panel" style="width:min(92vw,420px)">
+    <div class="big">Login / Register</div>
+    <div class="row" style="margin-top:10px"><input id="email" placeholder="Email"/></div>
+    <div class="row"><input id="pass" type="password" placeholder="Password (min 6)"/></div>
+    <div class="row" style="margin-top:8px">
+      <button id="btnDoLogin" class="btn-ok">Login</button>
+      <button id="btnDoRegister">Register</button>
+      <button id="btnCloseModal" class="btn-bad" style="margin-left:auto">Close</button>
+    </div>
+    <div id="authMsg" class="note" style="margin-top:8px"></div>
+  </div>
+</div>
+
 <script>
-(function(){
-  // Helpers
-  const $  = (s, r=document)=>r.querySelector(s);
-  const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-  const toast = (t)=>{ const b=$("#toast"); b.textContent=t; b.classList.remove("hidden"); setTimeout(()=>b.classList.add("hidden"), 2200); };
-  const api = async (url, opt={})=>{
-    const r = await fetch(url, { headers:{ "Content-Type":"application/json", ...(opt.headers||{}) }, credentials:"include", ...opt });
-    const j = await r.json().catch(()=>({ok:false,error:"Bad JSON"}));
-    if (!r.ok || !j.ok) throw new Error(j.error||("HTTP "+r.status));
-    return j;
+(() => {
+  const API = "/api";
+  const WSS = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/";
+
+  const el = sel => document.querySelector(sel);
+  const $ = {
+    userBar: el("#userBar"),
+    btnShowLogin: el("#btnShowLogin"),
+    btnLogout: el("#btnLogout"),
+    modal: el("#modal"),
+    email: el("#email"),
+    pass: el("#pass"),
+    btnDoLogin: el("#btnDoLogin"),
+    btnDoRegister: el("#btnDoRegister"),
+    btnCloseModal: el("#btnCloseModal"),
+    authMsg: el("#authMsg"),
+
+    tableName: el("#tableName"),
+    tableBlinds: el("#tableBlinds"),
+    tableStatus: el("#tableStatus"),
+    seatsWrap: el("#seats"),
+    seatTpl: document.getElementById("seatTpl"),
+    board: el("#board"),
+    pot: el("#pot"),
+
+    buyinBB: el("#buyinBB"),
+    seatIdx: el("#seatIdx"),
+    amountS: el("#amountS"),
+    btnJoin: el("#btnJoin"),
+    btnRebuy: el("#btnRebuy"),
+    btnLeave: el("#btnLeave"),
+    btnCheck: el("#btnCheck"),
+    btnCall: el("#btnCall"),
+    btnBet: el("#btnBet"),
+    btnRaise: el("#btnRaise"),
+    btnFold: el("#btnFold"),
+    btnAllin: el("#btnAllin"),
   };
 
-  // State
-  let me=null, ws=null, curTable=null;
+  let ws = null;
+  let me = null;
+  let table = null;
+  let seats = [];
+  let actingSeat = null;
+  let lastState = null;
 
-  // UI refs
-  const auth  = $("#auth");
-  const dash  = $("#dash");
-  const lobby = $("#lobby");
-  const table = $("#table");
-
-  function showAuth(){ auth.classList.remove("hidden"); dash.classList.add("hidden"); lobby.classList.add("hidden"); table.classList.add("hidden"); }
-  function showLobby(){ auth.classList.add("hidden"); dash.classList.remove("hidden"); lobby.classList.remove("hidden"); table.classList.add("hidden"); }
-  function showTable(){ auth.classList.add("hidden"); dash.classList.remove("hidden"); lobby.classList.add("hidden"); table.classList.remove("hidden"); }
-
+  // -------- Auth helpers --------
+  async function api(path, init={}){
+    const res = await fetch(API + path, { credentials:"include", ...init });
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(data?.error || ("HTTP "+res.status));
+    return data;
+  }
   async function refreshMe(){
     try{
-      const j = await api("/api/me");
-      me = j.user;
-      $("#user-email").textContent = me.email;
-      $("#user-nick").textContent  = me.nickname || "—";
-      $("#user-gold").textContent  = me.gold|0;
-      $("#user-silver").textContent= me.silver|0;
-      return true;
-    }catch{ me=null; return false; }
-  }
-
-  async function loadLobby(){
-    const j = await api("/api/poker/lobby");
-    const tb = $("#tbl-lobby tbody"); tb.innerHTML="";
-    for (const t of j.tables){
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${t.name}</td>
-        <td>${t.seats}</td>
-        <td>${(t.sb_s/100)|0}g/${(t.bb_s/100)|0}g</td>
-        <td>${t.min_buyin_bb}–${t.max_buyin_bb}</td>
-        <td>${t.players||0}</td>
-        <td><button data-id="${t.id}" class="btn-open">Otvori</button></td>`;
-      tb.appendChild(tr);
-    }
-    $$(".btn-open").forEach(b=> b.onclick = ()=> openTable(parseInt(b.getAttribute("data-id"),10)));
-  }
-
-  async function openTable(id){
-    const j = await api(`/api/poker/table/${id}/state`);
-    curTable = j.table;
-    $("#t-name").textContent = curTable.name;
-    $("#t-blinds").textContent = `Blinds: ${curTable.sb_s/100}g / ${curTable.bb_s/100}g`;
-    $("#t-state").textContent = j.hand ? j.hand.state : "waiting";
-    renderBoard(j.hand?.board||"");
-    renderSeats(j.seats);
-    showTable();
-    ensureWS();
-  }
-
-  function renderBoard(boardStr){
-    const b = $("#board"); b.innerHTML="";
-    const cards = (boardStr||"").split(",").filter(Boolean);
-    for (let c of cards){
-      const div = document.createElement("div"); div.className="cardimg"; div.textContent=c; b.appendChild(div);
+      const r = await api("/me");
+      me = r.user;
+      $.userBar.innerHTML = `${me.email}  &nbsp; <span class="muted">Chips: ${Math.floor(me.gold||0)}g ${(me.silver||0)}s</span>`;
+      $.btnShowLogin.classList.add("hidden");
+      $.btnLogout.classList.remove("hidden");
+    }catch{
+      me = null;
+      $.userBar.textContent = "Niste prijavljeni";
+      $.btnShowLogin.classList.remove("hidden");
+      $.btnLogout.classList.add("hidden");
     }
   }
-  function renderSeats(seats){
-    const box = $("#seats"); box.innerHTML="";
-    seats.forEach(s=>{
-      const div = document.createElement("div");
-      div.className = "seat" + (s.user_id===me?.id ? " me" : "");
-      div.innerHTML = `
-        <div><b>Seat ${s.seat_index}</b></div>
-        <div>Stack: ${(s.stack_s/100)|0}g ${(s.stack_s%100)|0}s</div>
-        <div>State: ${s.state}${s.in_hand? " (in hand)":""}</div>
-        <div class="muted">${s.last_action || ""}</div>
-      `;
-      box.appendChild(div);
+
+  // -------- UI helpers --------
+  function gs(s){ return `${Math.floor((s|0)/100)}g ${(s|0)%100}s`; }
+  function renderSeats(){
+    $.seatsWrap.innerHTML = "";
+    for (let i=0;i<(table?.seats||9);i++){
+      const tpl = $.seatTpl.content.firstElementChild.cloneNode(true);
+      tpl.classList.add("s"+i);
+      const data = seats.find(r => r.seat_index===i);
+      const name = tpl.querySelector(".name");
+      const stack = tpl.querySelector(".stack");
+      const state = tpl.querySelector(".state");
+      const dealer = tpl.querySelector(".dealer");
+      if (data){
+        name.textContent = `Seat ${i}` + (data.user_id ? (me && data.user_id===me.id ? " (YOU)" : "") : "");
+        stack.textContent = `Stack: ${gs(data.stack_s)}`;
+        state.textContent = `State: ${data.state}${data.in_hand? " (in hand)": ""}`;
+      } else {
+        name.textContent = `Seat ${i}`;
+        stack.textContent = `Stack: 0g 0s`;
+        state.textContent = `empty`;
+      }
+      // dealer button
+      if (lastState && (i===lastState.btn_seat)) dealer.classList.remove("hidden");
+      // acting highlight
+      if (actingSeat===i) tpl.classList.add("acting");
+      $.seatsWrap.appendChild(tpl);
+    }
+  }
+  function renderBoard(cardsCsv){
+    $.board.innerHTML = "";
+    const arr = (cardsCsv||"").split(",").filter(Boolean);
+    for (const _ of arr){
+      const c = document.createElement("div");
+      c.className = "card";
+      $.board.appendChild(c);
+    }
+  }
+
+  // -------- WebSocket --------
+  function connectWS(){
+    if (ws && (ws.readyState===1 || ws.readyState===0)) return;
+    ws = new WebSocket(WSS);
+    ws.addEventListener("open", ()=> { /* OK */ });
+    ws.addEventListener("message", (ev)=>{
+      let msg; try{ msg=JSON.parse(ev.data); }catch{ return; }
+      const t = msg?.type;
+      if (t==="connection_open"){ /* uid available */ }
+      if (t==="lobby_update"){ /* ignore for now */ }
+      if (t==="table_state"){
+        table = msg.table; seats = msg.seats||[];
+        $.tableName.textContent = `${table.name}`;
+        $.tableBlinds.textContent = `Blinds: ${Math.floor(table.sb_s/100)}g / ${Math.floor(table.bb_s/100)}g`;
+        $.tableStatus.textContent = (table.status||"waiting");
+        renderSeats();
+      }
+      if (t==="action_required"){
+        actingSeat = msg.seat_index;
+        renderSeats();
+      }
+      if (t==="board_update"){
+        renderBoard((msg.board||[]).join(","));
+      }
+      if (t==="showdown"){
+        $.pot.classList.add("hidden");
+        renderBoard((msg.board||[]).join(","));
+      }
+      if (t==="payouts"){
+        $.pot.classList.add("hidden");
+      }
+      if (t==="error"){
+        alert(msg.message || msg.code || "Action error");
+      }
     });
+    ws.addEventListener("close", ()=> setTimeout(connectWS, 1200));
   }
 
-  function ensureWS(){
-    if (ws && ws.readyState===1) return;
-    ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host);
-    ws.onopen = ()=> console.log("WS open");
-    ws.onmessage = (ev)=>{
-      let m; try{ m=JSON.parse(ev.data); }catch{ return; }
-      if (m.type==="table_state" && m.table_id===curTable?.id){
-        $("#t-state").textContent = m.table?.status || m.table?.state || "live";
-        renderSeats(m.seats||[]);
+  // -------- Actions --------
+  function sendAction(action, amount_s){
+    if (!ws || ws.readyState!==1) return alert("WS not connected");
+    if (!table){ return; }
+    // nađi moju stolicu
+    const mySeat = seats.find(s=> s.user_id=== (me?.id||-1));
+    if (!mySeat){ return alert("Nisi za stolom"); }
+    ws.send(JSON.stringify({
+      type:"player_action",
+      payload:{
+        table_id: table.id,
+        seat_index: mySeat.seat_index,
+        action,
+        amount_s: Number(amount_s||0)
       }
-      if (m.type==="board_update" && curTable && m.table_id===curTable.id){
-        renderBoard((m.board||[]).join(","));
-      }
-      if (m.type==="action_required" && curTable){
-        $("#act-hint").textContent = `Na potezu: seat ${m.seat_index} — ${Math.floor((m.ms_left||0)/1000)}s`;
-      }
-      if (m.type==="error"){ toast("Greška: "+(m.message||m.code)); }
-    };
+    }));
   }
 
-  // Buttons
-  $("#btn-login").onclick = async ()=>{
+  // -------- Events --------
+  $.btnShowLogin.onclick = ()=> $.modal.classList.remove("hidden");
+  $.btnCloseModal.onclick = ()=> $.modal.classList.add("hidden");
+  $.btnDoLogin.onclick = async ()=>{
     try{
-      const email = $("#login-email").value.trim();
-      const pass  = $("#login-pass").value;
-      await api("/api/login",{ method:"POST", body:JSON.stringify({ email, password:pass }) });
-      await refreshMe(); await loadLobby(); showLobby(); toast("Ulogovan");
-    }catch(e){ $("#login-msg").textContent = e.message; }
+      $.authMsg.textContent = "";
+      await api("/login", {method:"POST", headers:{'Content-Type':'application/json'}, body: JSON.stringify({email:$.email.value, password:$.pass.value})});
+      $.modal.classList.add("hidden");
+      await refreshMe();
+      connectWS();
+      // refresh table state
+      const st = await api("/poker/table/1/state");
+      table = st.table; seats = st.seats||[]; lastState = st.hand;
+      renderSeats(); renderBoard(st.hand?.board || "");
+    }catch(e){ $.authMsg.textContent = "Login fail: " + e.message; }
   };
-  $("#btn-register").onclick = async ()=>{
+  $.btnDoRegister.onclick = async ()=>{
     try{
-      const email = $("#reg-email").value.trim();
-      const pass  = $("#reg-pass").value;
-      const nick  = $("#reg-nick").value.trim();
-      await api("/api/register",{ method:"POST", body:JSON.stringify({ email, password:pass, nickname:nick }) });
-      toast("Račun kreiran — sada se uloguj"); $("#reg-msg").textContent="";
-    }catch(e){ $("#reg-msg").textContent = e.message; }
+      $.authMsg.textContent = "";
+      await api("/register", {method:"POST", headers:{'Content-Type':'application/json'}, body: JSON.stringify({email:$.email.value, password:$.pass.value})});
+      $.authMsg.textContent = "OK – sada klikni Login.";
+    }catch(e){ $.authMsg.textContent = "Register fail: " + e.message; }
   };
-  $("#btn-logout").onclick = async ()=>{ try{ await api("/api/logout"); me=null; showAuth(); toast("Odjavljeno"); }catch{} };
-  $("#btn-refresh").onclick = ()=> loadLobby();
-  $("#btn-back").onclick    = ()=> showLobby();
+  $.btnLogout.onclick = async ()=>{ try{ await api("/logout"); }catch{}; await refreshMe(); };
 
-  $("#btn-join").onclick = async ()=>{
-    if (!curTable) return;
+  $.btnJoin.onclick = async ()=>{
     try{
-      const buyin = parseInt($("#inp-buyin").value,10)||0;
-      const seat  = parseInt($("#inp-seat").value,10); // -1 za auto
-      const j = await api(`/api/poker/table/${curTable.id}/join`, { method:"POST", body:JSON.stringify({ buyin_bb:buyin, seat_index:isFinite(seat)?seat:-1 }) });
-      toast(`Sjeo si na seat ${j.seat_index} (stack ${(j.stack_s/100)|0}g)`);
-      await openTable(curTable.id);
-    }catch(e){ toast("Join: "+e.message); }
+      const bb = Number($.buyinBB.value||0);
+      const seat_index = $.seatIdx.value==="" ? undefined : Number($.seatIdx.value);
+      const body = seat_index===undefined ? { buyin_bb: bb } : { buyin_bb: bb, seat_index };
+      await api("/poker/table/1/join",{method:"POST", headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      const st = await api("/poker/table/1/state"); table = st.table; seats = st.seats||[]; lastState = st.hand; renderSeats();
+    }catch(e){ alert(e.message||"Join failed"); }
   };
-  $("#btn-rebuy").onclick = async ()=>{
-    if (!curTable) return;
+  $.btnRebuy.onclick = async ()=>{
     try{
-      const buyin = parseInt($("#inp-buyin").value,10)||0;
-      const j = await api(`/api/poker/table/${curTable.id}/rebuy`, { method:"POST", body:JSON.stringify({ buyin_bb:buyin }) });
-      toast(`Rebuy OK (seat ${j.seat_index}, stack ${(j.stack_s/100)|0}g)`);
-      await openTable(curTable.id);
-    }catch(e){ toast("Rebuy: "+e.message); }
+      const bb = Number($.buyinBB.value||0);
+      await api("/poker/table/1/rebuy",{method:"POST", headers:{'Content-Type':'application/json'}, body: JSON.stringify({ buyin_bb: bb })});
+    }catch(e){ alert(e.message||"Rebuy failed"); }
   };
-  $("#btn-leave").onclick = async ()=>{
-    if (!curTable) return;
+  $.btnLeave.onclick = async ()=>{
     try{
-      const j = await api(`/api/poker/table/${curTable.id}/leave`, { method:"POST" });
-      toast(`Leave OK (vraceno ${(j.returned_s/100)|0}g ${(j.returned_s%100)|0}s)`);
-      await openTable(curTable.id);
-    }catch(e){ toast("Leave: "+e.message); }
+      await api("/poker/table/1/leave",{method:"POST"});
+    }catch(e){ alert(e.message||"Leave failed"); }
   };
 
-  // Actions
-  $$("#table [data-act]").forEach(b=>{
-    b.onclick = ()=>{
-      if (!curTable || !ws || ws.readyState!==1) return toast("WS nije spreman");
-      const act = b.getAttribute("data-act");
-      const amt = parseInt($("#inp-bet").value,10)|0;
-      ws.send(JSON.stringify({ type:"player_action", payload:{ table_id:curTable.id, seat_index:0, action:act, amount_s:amt } }));
-      // seat_index:0 je placeholder — klijent obično zna svoj seat; u produkciji dohvati ga iz seats[] gdje user_id===me.id
-    };
-  });
+  $.btnCheck.onclick = ()=> sendAction("check");
+  $.btnCall.onclick = ()=> sendAction("call");
+  $.btnBet.onclick  = ()=> sendAction("bet",   Number($.amountS.value||0));
+  $.btnRaise.onclick= ()=> sendAction("raise", Number($.amountS.value||0));
+  $.btnFold.onclick = ()=> sendAction("fold");
+  $.btnAllin.onclick= ()=> sendAction("allin", 999999999);
 
-  // Boot
-  (async ()=>{
-    if (await refreshMe()){ await loadLobby(); showLobby(); } else { showAuth(); }
+  // -------- Boot --------
+  (async () => {
+    await refreshMe();
+    connectWS();
+    try{
+      const st = await api("/poker/table/1/state");
+      table = st.table; seats = st.seats||[]; lastState = st.hand;
+      $.tableName.textContent = table.name;
+      $.tableBlinds.textContent = `Blinds: ${Math.floor(table.sb_s/100)}g / ${Math.floor(table.bb_s/100)}g`;
+      $.tableStatus.textContent = table.status || "waiting";
+      renderSeats(); renderBoard(st.hand?.board || "");
+    }catch{}
   })();
-
 })();
 </script>
 </body>
