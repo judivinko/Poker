@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Poker Lobby</title>
 <link rel="stylesheet" href="/app.css">
 <style>
   :root{ --bg:#0b0d13; --panel:#111722; --muted:#94a3b8; --br:#243041; --btn:#22d3ee; }
   body{ margin:0; background:var(--bg); color:#e5e7eb; font:14px/1.4 system-ui,Segoe UI,Roboto,Arial,sans-serif; }
-  .wrap{ max-width:720px; margin:0 auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .wrap{ max-width:820px; margin:0 auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
   h1{ text-align:center; margin:8px 0 14px; }
   .card{ background:var(--panel); border:1px solid var(--br); border-radius:12px; padding:14px; }
-  .row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .col{ display:flex; flex-direction:column; gap:8px; }
   input{ background:#0b1220; border:1px solid var(--br); border-radius:8px; padding:10px; color:#e5e7eb; min-width:220px; }
   button{ background:var(--btn); color:#000; border:none; border-radius:8px; padding:10px 14px; font-weight:700; cursor:pointer; }
@@ -20,15 +20,16 @@
   .muted{ color:var(--muted); }
   .list{ display:flex; flex-direction:column; gap:8px; }
   .item{ display:flex; justify-content:space-between; align-items:center; background:#0f1624; border:1px solid var(--br); border-radius:10px; padding:10px 12px; }
-  .center{ text-align:center; }
   .hidden{ display:none !important; }
   .right{ margin-left:auto; }
   /* modal */
-  #make-box{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.5); }
-  .modal{ width:min(92vw,320px); background:#0f1624; border:1px solid var(--br); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  #make-box,#profile-box{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.5); }
+  .modal{ width:min(92vw,360px); background:#0f1624; border:1px solid var(--br); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; }
   select{ background:#0b1220; border:1px solid var(--br); color:#e5e7eb; border-radius:8px; padding:10px; }
-  .split{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  @media (max-width:560px){ .split{ grid-template-columns:1fr; } }
+  .grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .avatar{ width:42px; height:42px; border-radius:999px; object-fit:cover; border:1px solid #263246; background:#0b1220; }
+  .avatar.big{ width:60px; height:60px; }
+  .who-chip{ display:flex; align-items:center; gap:10px; }
 </style>
 </head>
 <body>
@@ -38,8 +39,7 @@
 
   <!-- AUTH PANEL -->
   <section class="card" id="auth">
-    <div class="split">
-      <!-- Login -->
+    <div class="row" style="justify-content:space-between;">
       <div class="col">
         <div class="muted" style="font-weight:700;">Login</div>
         <input id="login-email" type="email" placeholder="email">
@@ -49,7 +49,6 @@
           <button id="btn-logout" class="secondary">Logout</button>
         </div>
       </div>
-      <!-- Register -->
       <div class="col">
         <div class="muted" style="font-weight:700;">Registracija</div>
         <input id="reg-email" type="email" placeholder="email">
@@ -62,9 +61,18 @@
 
   <!-- WHO / ACTIONS -->
   <section class="card hidden" id="who">
-    <div class="row" style="align-items:center;">
-      <div id="who-text" class="muted">—</div>
-      <button id="btn-open-make" class="right">+ Napravi Sto</button>
+    <div class="row" style="justify-content:space-between;">
+      <div class="who-chip">
+        <img id="who-avatar" class="avatar" src="/avatar_1.png" alt="">
+        <div>
+          <div id="who-email" style="font-weight:700;">—</div>
+          <div id="who-balance" class="muted">—</div>
+        </div>
+      </div>
+      <div class="row">
+        <button id="btn-open-profile" class="secondary">Profil</button>
+        <button id="btn-open-make">+ Napravi Sto</button>
+      </div>
     </div>
   </section>
 
@@ -95,25 +103,55 @@
   </div>
 </div>
 
+<!-- MODAL: PROFILE / AVATAR -->
+<div id="profile-box">
+  <div class="modal">
+    <div class="muted" style="font-weight:700;">Tvoj profil</div>
+    <div class="row">
+      <img id="profile-avatar-preview" class="avatar big" src="/avatar_1.png" alt="">
+      <div>
+        <div id="profile-email">—</div>
+        <div id="profile-balance" class="muted">—</div>
+      </div>
+    </div>
+    <div class="muted" style="margin-top:6px;">Odaberi avatar</div>
+    <div id="avatar-grid" class="grid"></div>
+    <div class="row" style="margin-top:10px;">
+      <button id="btn-close-profile" class="secondary">Zatvori</button>
+    </div>
+    <div id="profile-msg" class="muted"></div>
+  </div>
+</div>
+
 <script>
-  // ------------- helpers -------------
+  // helpers
   const $ = s => document.querySelector(s);
   function msg(sel, t, ok=true){ const e=$(sel); if(!e) return; e.textContent=t||""; e.style.color = ok ? "#9ba7b8" : "#fca5a5"; }
+  function goTable(id){ location.href = "/table?id=" + id; }
 
-  // ------------- auth -------------
+  // auth
+  let ME = null;
+
   async function me(){
     try{
       const r = await fetch("/api/me", { credentials:"include" }).then(r=>r.json());
       if (r && r.ok && r.user){
+        ME = r.user;
         $("#auth").classList.add("hidden");
         $("#who").classList.remove("hidden");
-        $("#who-text").textContent = `${r.user.email} • balans: ${r.user.balance} čipova`;
-        return r.user;
+        $("#who-email").textContent = ME.email;
+        $("#who-balance").textContent = `balans: ${ME.balance} čipova`;
+        const av = ME.avatar?.startsWith("/") ? ME.avatar : "/"+(ME.avatar||"avatar_1.png");
+        $("#who-avatar").src = av;
+        return ME;
       }
     }catch{}
+    ME = null;
     $("#auth").classList.remove("hidden");
     $("#who").classList.add("hidden");
-    $("#who-text").textContent = "—";
+    $("#who-email").textContent = "—";
+    $("#who-balance").textContent = "—";
+    $("#who-avatar").src = "/avatar_1.png";
     return null;
   }
 
@@ -146,18 +184,14 @@
 
   async function doLogout(){
     await fetch("/api/logout", { credentials:"include" });
-    $("#auth").classList.remove("hidden");
-    $("#who").classList.add("hidden");
-    await loadTables();
+    await me(); await loadTables();
   }
 
   $("#btn-login").onclick = doLogin;
   $("#btn-register").onclick = doRegister;
   $("#btn-logout").onclick = doLogout;
 
-  // ------------- lobby -------------
-  function goTable(id){ location.href = "/table?id=" + id; }
-
+  // lobby
   async function loadTables(){
     try{
       const r = await fetch("/api/tables").then(r=>r.json());
@@ -165,7 +199,7 @@
       const box = $("#list");
       box.innerHTML = "";
       if (!r.tables.length){
-        box.innerHTML = `<div class="center muted">Nema stolova. Napravi prvi.</div>`;
+        box.innerHTML = `<div class="muted">Nema stolova. Napravi prvi.</div>`;
       }
       for (const t of r.tables){
         const div = document.createElement("div");
@@ -184,10 +218,9 @@
   }
   $("#btn-refresh").onclick = loadTables;
 
-  // ------------- create table -------------
+  // create table
   $("#btn-open-make").onclick = () => { $("#make-box").style.display="flex"; msg("#make-msg",""); };
   $("#btn-close-make").onclick = () => { $("#make-box").style.display="none"; };
-
   $("#btn-create").onclick = async ()=>{
     const seats = Number($("#seats").value);
     try{
@@ -204,7 +237,46 @@
     }
   };
 
-  // ------------- websocket auto refresh -------------
+  // profile / avatars
+  $("#btn-open-profile").onclick = async ()=>{
+    if (!ME) { await me(); if(!ME) return; }
+    $("#profile-email").textContent = ME.email;
+    $("#profile-balance").textContent = `balans: ${ME.balance} čipova`;
+    const av = ME.avatar?.startsWith("/") ? ME.avatar : "/"+(ME.avatar||"avatar_1.png");
+    $("#profile-avatar-preview").src = av;
+    // učitaj listu avatara
+    const r = await fetch("/api/avatars").then(r=>r.json()).catch(()=>null);
+    const grid = $("#avatar-grid"); grid.innerHTML="";
+    (r?.avatars||[]).forEach(src=>{
+      const img = document.createElement("img");
+      img.className="avatar";
+      img.src = src;
+      img.title = src.split("/").pop();
+      img.onclick = async ()=>{
+        try{
+          const rr = await fetch("/api/me/avatar", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            credentials:"include",
+            body: JSON.stringify({ avatar: src })
+          }).then(x=>x.json());
+          if (rr.ok){
+            $("#profile-avatar-preview").src = src;
+            $("#who-avatar").src = src;
+            msg("#profile-msg","Avatar promijenjen.", true);
+            await me(); // osvježi ME
+          }else{
+            msg("#profile-msg", rr.error||"Neuspjelo.", false);
+          }
+        }catch{ msg("#profile-msg","Greška.", false); }
+      };
+      grid.appendChild(img);
+    });
+    $("#profile-box").style.display="flex";
+  };
+  $("#btn-close-profile").onclick = ()=> { $("#profile-box").style.display="none"; };
+
+  // websocket
   let ws;
   function connectWS(){
     try{
@@ -219,7 +291,7 @@
     }catch{}
   }
 
-  // ------------- boot -------------
+  // boot
   (async ()=>{
     await me();
     await loadTables();
