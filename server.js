@@ -1,3 +1,6 @@
+// TexasHoldem • Minimal backend matching your JSON spec (bez viška)
+// Express + better-sqlite3 + JWT cookie auth + WebSocket lobby/table updates
+
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -9,13 +12,14 @@ const jwt = require("jsonwebtoken");
 const { WebSocketServer } = require("ws");
 const { parse: parseCookie } = require("cookie");
 
+// ----------------- CONFIG -----------------
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const ENV = process.env.NODE_ENV || "development";
 const IS_PROD = ENV === "production";
 
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-in-prod";
-const TOKEN_NAME = "token";
+const TOKEN_NAME = "token";                  // mora biti "token"
 const ADMIN_KEY = process.env.ADMIN_KEY || "set-admin-key";
 
 const TURN_TIMER_S = parseInt(process.env.TURN_TIMER_S || "15", 10);
@@ -31,6 +35,7 @@ const DB_FILE = process.env.DB_PATH || path.join(ROOT, "data", "poker.db");
 fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
 fs.mkdirSync(PUB, { recursive: true });
 
+// ----------------- APP -----------------
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -46,6 +51,7 @@ app.get("/", (_req, res) => {
   else res.type("text").send("Poker server ready. Put your /public files.");
 });
 
+// ----------------- DB -----------------
 const db = new Database(DB_FILE);
 db.pragma("journal_mode = WAL");
 
@@ -55,6 +61,7 @@ const isPass  = (x)=> typeof x==="string" && x.length>=6;
 const sToG = s => Math.floor((s|0)/100);
 const gToS = g => (g|0)*100;
 
+// ----------------- AUTH HELPERS -----------------
 function signToken(u){ return jwt.sign({ uid:u.id, email:u.email }, JWT_SECRET, { expiresIn:"7d" }); }
 function readToken(req){
   const t = req.cookies && req.cookies[TOKEN_NAME];
@@ -74,6 +81,7 @@ function requireAdminKey(req, res, next){
   next();
 }
 
+// ----------------- SCHEMA -----------------
 function ensure(sql){ db.exec(sql); }
 ensure(`
 CREATE TABLE IF NOT EXISTS users(
@@ -177,21 +185,8 @@ CREATE TABLE IF NOT EXISTS admin_meta(
   key TEXT PRIMARY KEY,
   val TEXT NOT NULL
 );`);
-ensure(`
-CREATE TABLE IF NOT EXISTS user_items(
-  user_id INTEGER NOT NULL,
-  name TEXT NOT NULL,
-  tier INTEGER NOT NULL DEFAULT 1,
-  qty INTEGER NOT NULL DEFAULT 1
-);`);
-ensure(`
-CREATE TABLE IF NOT EXISTS user_recipes(
-  user_id INTEGER NOT NULL,
-  name TEXT NOT NULL,
-  tier INTEGER NOT NULL DEFAULT 1,
-  qty INTEGER NOT NULL DEFAULT 1
-);`);
 
+// Seed: jedan stol + sjedišta
 (function seedTable(){
   const any = db.prepare("SELECT id FROM poker_tables LIMIT 1").get();
   if (!any){
@@ -206,6 +201,7 @@ CREATE TABLE IF NOT EXISTS user_recipes(
   }
 })();
 
+// ----------------- UTIL -----------------
 function deleteZeroPrefixedImages(dir) {
   try{
     if (!fs.existsSync(dir)) return;
@@ -224,8 +220,8 @@ function deleteZeroPrefixedImages(dir) {
     }
   }catch{}
 }
-deleteZeroPrefixedImages(IMG_ROOT);
 
+// ----------------- POKER ENGINE (minimal) -----------------
 const SUITS = ["S","H","D","C"];
 const RANKS = ["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
 const RVAL = Object.fromEntries(RANKS.map((r,i)=>[r, 14 - i]));
@@ -256,7 +252,7 @@ function handRank5(cards){
 function cmpRank(a,b){ const L=Math.max(a.length,b.length); for(let i=0;i<L;i++){ const va=a[i]??0, vb=b[i]??0; if (va>vb) return 1; if (va<vb) return -1; } return 0; }
 function best5of7(seven){ let best=null; for (const five of combos5(seven)){ const rank=handRank5(five); if (!best || cmpRank(rank,best)>0){ best=rank; } } return { rank:best }; }
 
-const RT = new Map();
+const RT = new Map(); // runtime po stolu
 
 function tableRow(tableId){ return db.prepare("SELECT * FROM poker_tables WHERE id=?").get(tableId); }
 function tableSeats(tableId){ return db.prepare("SELECT * FROM poker_seats WHERE table_id=? ORDER BY seat_index").all(tableId); }
@@ -285,8 +281,6 @@ function setActing(tableId, seatIndex){
   const t = tableRow(tableId);
   const rt = RT.get(tableId); if (!rt) return;
   rt.toAct = seatIndex;
-  const until = Date.now() + (t.turn_timer_s*1000);
-  rt.timers.deadline = until;
   if (rt.timers.handle) clearTimeout(rt.timers.handle);
   rt.timers.handle = setTimeout(()=> onTimeout(tableId), t.turn_timer_s*1000);
   wsBroadcast("action_required", { table_id: tableId, seat_index: seatIndex, ms_left: t.turn_timer_s*1000 });
@@ -332,7 +326,7 @@ function startIfCan(tableId){
     tableId, handId, state: "preflop", deck, board: [],
     pots: [], toAct: null, minRaise: t.bb_s, currentBet: t.bb_s,
     streetBets: new Map(), acted: new Set(),
-    timers: { deadline: 0, handle: null, timebank: new Map() }
+    timers: { handle: null, timebank: new Map() }
   });
 
   db.prepare("UPDATE poker_tables SET btn_pos=? WHERE id=?").run(bb, tableId);
@@ -346,14 +340,6 @@ function onTimeout(tableId){
   const rt = RT.get(tableId); if (!rt) return;
   const t = tableRow(tableId);
   const seat = db.prepare("SELECT * FROM poker_seats WHERE table_id=? AND seat_index=?").get(tableId, rt.toAct);
-  const left = (rt.timers.timebank.get(seat.user_id)||t.timebank_s);
-  if (left>0){
-    const spend = Math.min(left, t.turn_timer_s);
-    rt.timers.timebank.set(seat.user_id, left - spend);
-    rt.timers.handle = setTimeout(()=> onTimeout(tableId), spend*1000);
-    wsBroadcast("action_required", { table_id: tableId, seat_index: seat.seat_index, ms_left: spend*1000, timebank_left_s: left-spend });
-    return;
-  }
   const need = (rt.currentBet - (rt.streetBets.get(seat.seat_index)||0))|0;
   if (need<=0) applyAction(tableId, seat.seat_index, "check", 0, true);
   else applyAction(tableId, seat.seat_index, "fold", 0, true);
@@ -403,7 +389,6 @@ function advanceStreet(tableId){
 }
 function streetComplete(tableId){
   const rt = RT.get(tableId); if (!rt) return false;
-  const t = tableRow(tableId);
   const occ = activePlayers(tableId).map(s=>s.seat_index);
   const needers = occ.filter(si => (rt.streetBets.get(si)||0) < rt.currentBet);
   const alive = db.prepare("SELECT COUNT(*) AS c FROM poker_seats WHERE table_id=? AND in_hand=1").get(tableId).c|0;
@@ -553,6 +538,9 @@ function applyAction(tableId, seatIndex, action, amountS, auto=false){
   return { ok:false, error:"Unknown action" };
 }
 
+// ----------------- REST (baseUrl: /api) -----------------
+
+// Auth
 app.post("/api/register", async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -590,6 +578,7 @@ app.get("/api/me", (req,res)=>{
   res.json({ ok:true, user:{ id:u.id, email:u.email, is_admin:!!u.is_admin, gold:sToG(u.balance_silver), silver:u.balance_silver%100 } });
 });
 
+// Admin
 app.get("/api/admin/ping", requireAdminKey, (_req,res)=> res.json({ ok:true }));
 app.get("/api/admin/users", requireAdminKey, (_req,res)=>{
   const rows = db.prepare("SELECT id,email,is_admin,is_disabled,balance_silver,created_at,last_seen FROM users").all();
@@ -617,12 +606,6 @@ app.post("/api/admin/disable-user", requireAdminKey, (req,res)=>{
   if (!u) return res.status(404).json({ ok:false, error:"User not found" });
   db.prepare("UPDATE users SET is_disabled=? WHERE id=?").run(disabled?1:0, u.id);
   res.json({ ok:true });
-});
-app.get("/api/admin/user/:id/inventory", requireAdminKey, (req,res)=>{
-  const uid = parseInt(req.params.id,10);
-  const items   = db.prepare("SELECT name,tier,qty FROM user_items WHERE user_id=?").all(uid);
-  const recipes = db.prepare("SELECT name,tier,qty FROM user_recipes WHERE user_id=?").all(uid);
-  res.json({ ok:true, items, recipes });
 });
 app.get("/api/admin/bonus-codes", requireAdminKey, (_req,res)=>{
   const rows = db.prepare("SELECT slot,code,percent,total_credited_silver FROM admin_bonus_codes ORDER BY slot ASC").all();
@@ -660,6 +643,7 @@ app.post("/api/admin/cleanup-images", requireAdminKey, (_req,res)=>{
   res.json({ ok:true, cleaned:true });
 });
 
+// Lobby/Table
 app.get("/api/poker/lobby", (_req,res)=>{
   const rows = db.prepare(`
     SELECT t.*,
@@ -798,13 +782,15 @@ app.post("/api/poker/table/:id/leave", (req,res)=>{
   }catch(e){ res.status(400).json({ ok:false, error:String(e.message||e) }); }
 });
 
-app.get("/health", (_req,res)=> res.json({ ok:true, ts:Date.now() }));
-app.get("/metrics", (_req,res)=>{
+// Health & Metrics (sa /api prefiksom)
+app.get("/api/health", (_req,res)=> res.json({ ok:true, ts:Date.now() }));
+app.get("/api/metrics", (_req,res)=>{
   const tables = db.prepare("SELECT COUNT(*) c FROM poker_tables").get().c|0;
   const hands  = db.prepare("SELECT COUNT(*) c FROM hands").get().c|0;
   res.json({ ok:true, tables, hands, ts:Date.now() });
 });
 
+// ----------------- WS -----------------
 function wsUserIdFromReq(req){
   try{
     const cookies = parseCookie(req.headers.cookie || "");
@@ -831,6 +817,7 @@ wss.on("connection", (ws, req)=>{
   });
 });
 
+// ----------------- START -----------------
 server.listen(PORT, HOST, () => {
   console.log(`POKER server listening at http://${HOST}:${PORT}`);
 });
