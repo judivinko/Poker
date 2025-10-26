@@ -1,5 +1,4 @@
-// TEXAS HOLD'EM CASH GAME — FULL SERVER (AUTH + ADMIN + LOBBY + ENGINE)
-// =====================================================================
+// ===== PRVI DIO =====
 // TEXAS HOLD'EM CASH GAME — FULL SERVER (AUTH + ADMIN + LOBBY + ENGINE)
 // =====================================================================
 const express = require("express");
@@ -52,7 +51,7 @@ CREATE TABLE IF NOT EXISTS game_state (
   acting INTEGER       -- seat na potezu (-1 ako niko)
 );
 `);
-
+// ===== DRUGI DIO =====
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
@@ -91,7 +90,7 @@ function newDeck(){
 }
 function parseBoard(s){ return s? s.split(",").filter(Boolean):[]; }
 function boardStr(a){ return (a&&a.length)? a.join(",") : ""; }
-
+// ===== TREĆI DIO =====
 // --- In-memory game runtime (po stolu) ---
 /* Struktura:
 GAME[table_id] = {
@@ -182,9 +181,7 @@ function initHand(table){
 
   // acting red preflop: next nakon BB
   const afterBB = order[(order.indexOf(g.bb_i)+1)%order.length];
-  g.toAct = order
-    .slice(order.indexOf(afterBB))
-    .concat(order.slice(0, order.indexOf(afterBB)));
+  g.toAct = order.slice(order.indexOf(afterBB)).concat(order.slice(0,order.indexOf(afterBB)]);
   g.yetToAct = new Set(g.toAct);
 
   // persist osnovnog GS
@@ -251,7 +248,7 @@ function everyoneFoldedExceptOne(g){
   const alive = g.toAct.filter(i=>!g.allin.has(i));
   return alive.length<=1;
 }
-
+// ===== ČETVRTI DIO =====
 // --- HAND EVALUATOR (7 → 5 best) ---
 function rankToVal(r){ return "23456789TJQKA".indexOf(r); }
 function isStraight(vals){
@@ -360,7 +357,7 @@ function showdownAndPayout(table, g){
   const upd = db.prepare("UPDATE seats SET stack=? WHERE table_id=? AND seat_index=?");
   for(const i of Object.keys(g.stacks)){ upd.run(g.stacks[i|0], table.id, i|0); }
 }
-
+// ===== PETI DIO =====
 // ---------- AUTH ----------
 app.post("/api/register",(req,res)=>{
   const { email,password } = req.body||{};
@@ -398,7 +395,7 @@ app.post("/api/me/avatar",(req,res)=>{
   db.prepare("UPDATE users SET avatar=? WHERE id=?").run(avatar,u.id);
   res.json({ ok:true });
 });
-
+// ===== ŠESTI DIO =====
 // ---------- ADMIN (NE DIRAMO) ----------
 app.get("/api/admin/users",(req,res)=>{
   if(req.headers["x-admin-key"]!==ADMIN_KEY) return res.json({ ok:false,error:"key" });
@@ -419,7 +416,7 @@ app.post("/api/admin/disable",(req,res)=>{
   db.prepare("UPDATE users SET disabled=? WHERE email=?").run(flag?1:0, email.toLowerCase());
   res.json({ ok:true });
 });
-
+// ===== SEDMI DIO =====
 // ---------- TABLES / LOBBY ----------
 app.post("/api/table/create",(req,res)=>{
   const u=requireUser(req,res); if(!u) return;
@@ -703,7 +700,7 @@ function ensureGameRunning(table_id){
       .run(g.pot|0, g.toAct[0] ?? -1, table_id);
   }
 }
-
+// ===== OSMI DIO =====
 // ---------- PAGES ----------
 app.get("/",(req,res)=>res.sendFile(path.join(__dirname,"public/index.html")));
 app.get("/table",(req,res)=>res.sendFile(path.join(__dirname,"public/table.html")));
