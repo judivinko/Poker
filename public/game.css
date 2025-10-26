@@ -1,0 +1,96 @@
+/* ===== /public/game.css ===== */
+
+/* Theme */
+:root{
+  --bg:#0b0d13; --panel:#0f1624; --br:#233047; --muted:#94a3b8; --accent:#22d3ee;
+  --seat-w:260px; --seat-h:96px; --avatar:66px; --card-w:54px; --card-h:78px;
+  --radius:14px;
+}
+html,body{height:100%;margin:0;background:var(--bg);color:#e5e7eb;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+.hidden{display:none!important}
+
+/* Wrap + table bg */
+.wrap{position:relative;width:100vw;height:100vh;overflow:hidden;display:flex;align-items:center;justify-content:center}
+#table{position:relative;width:min(100vw,100vh);height:min(100vw,100vh);background:url('/poker_table.png') center/contain no-repeat}
+
+/* Topbar */
+#topbar{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:40;display:flex;gap:8px;align-items:center}
+.pill{background:#0f1624;border:1px solid var(--br);border-radius:999px;padding:6px 12px;color:#e5e7eb}
+.pill.btn{cursor:pointer;font-weight:800}
+
+/* Modals (shared) */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+.modal{width:min(92vw,420px);background:#0f1624;border:1px solid var(--br);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.modal .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.modal input,.modal select{background:#0b1220;border:1px solid var(--br);border-radius:10px;padding:10px;color:#e5e7eb}
+.modal button{background:var(--accent);color:#000;border:none;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer}
+.modal button.secondary{background:#2b3445;color:#e5e7eb}
+
+/* Lobby UI */
+.tabs{display:flex;gap:10px;margin-bottom:16px}
+.tab{padding:10px 16px;border-radius:999px;border:1px solid var(--br);background:#0f1624;cursor:pointer;font-weight:800}
+.tab.active{background:var(--accent);color:#000;border-color:transparent}
+.section{display:none;gap:12px}
+.section.active{display:grid;grid-template-columns:1fr;gap:16px}
+.card{background:#0f1624;border:1px solid var(--br);border-radius:14px;padding:16px;display:flex;gap:16px;align-items:center}
+.card .meta{flex:1}
+.card h3{margin:0 0 6px 0}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.kpi{background:#0b1220;border:1px solid var(--br);border-radius:10px;padding:10px;text-align:center}
+.kpi b{display:block;font-size:16px;margin-bottom:4px}
+.btn{background:var(--accent);color:#000;border:0;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer}
+
+/* Board & pot */
+#board{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;gap:10px;z-index:5}
+.card{width:var(--card-w);height:var(--card-h);background:url('/card_front_blank.png') center/cover no-repeat;border-radius:8px;border:1px solid rgba(255,255,255,.08);box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.card.back{background-image:url('/kard_bach.png')}
+#pot{position:absolute;left:50%;top:50%;transform:translate(-50%,-125%);padding:7px 14px;border-radius:999px;background:rgba(15,22,36,.9);border:1px solid var(--br);box-shadow:0 4px 16px rgba(0,0,0,.35);font-weight:800;z-index:6}
+#status{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);font-weight:700;letter-spacing:.2px;opacity:.95;text-shadow:0 1px 1px #000;z-index:6}
+
+/* Actions (placeholder) */
+#actions{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);display:flex;gap:10px;z-index:7}
+#actions button{border:0;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;background:var(--accent);color:#000}
+#actions .secondary{background:#2a3344;color:#e5e7eb}
+#actions .danger{background:#b91c1c;color:#fff}
+
+/* Seats - PANEL stil */
+#seats .seat{position:absolute;width:var(--seat-w);height:var(--seat-h);transform:translate(-50%,-50%);pointer-events:auto;z-index:4}
+#seats .seat::after{content:"";position:absolute;left:40px;top:50%;transform:translateY(-50%);width:calc(var(--seat-w) - 40px);height:calc(var(--seat-h) - 20px);background:var(--panel);border:1px solid var(--br);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.45),0 0 0 2px rgba(0,0,0,.25) inset}
+#seats .avatar{position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:var(--avatar);height:var(--avatar);border-radius:999px;object-fit:cover;border:3px solid var(--accent);background:#0b1220;box-shadow:0 6px 16px rgba(0,0,0,.45)}
+#seats .nick{position:absolute;left:100px;top:20px;font-size:14px;font-weight:800;max-width:calc(var(--seat-w) - 120px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#seats .stack{position:absolute;left:100px;bottom:16px;font-size:13px;color:#23e6a5;text-shadow:0 1px 1px rgba(0,0,0,.5)}
+#seats .badges{position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;gap:6px;align-items:center;justify-content:center}
+.badge{font-size:10px;background:var(--accent);color:#000;padding:1px 6px;border-radius:999px;font-weight:800}
+.badge.img{background:transparent;padding:0}
+.badge.img img{display:block;width:18px;height:18px}
+.badge.dealer.img img{content:url('/dealer_button.png')}
+.badge.sb.img img{content:url('/small_blind.png')}
+.badge.bb.img img{content:url('/big_blind.png')}
+
+/* “SLOBODNO” kao dugme */
+.free{background:#2b3445;color:#e5e7eb;border:1px solid var(--br);border-radius:999px;padding:4px 10px;font-weight:800;cursor:pointer}
+.free:hover{filter:brightness(1.1)}
+
+/* Pozicije 9-max po elipsi */
+.seat[data-i="0"]{ left:50%; top:86% }
+.seat[data-i="1"]{ left:72%; top:79% }
+.seat[data-i="2"]{ left:86%; top:60% }
+.seat[data-i="3"]{ left:84%; top:36% }
+.seat[data-i="4"]{ left:68%; top:18% }
+.seat[data-i="5"]{ left:32%; top:18% }
+.seat[data-i="6"]{ left:16%; top:36% }
+.seat[data-i="7"]{ left:14%; top:60% }
+.seat[data-i="8"]{ left:28%; top:79% }
+
+/* Responsive */
+@media (max-width: 900px){
+  :root{ --seat-w:220px; --seat-h:84px; --avatar:54px; --card-w:48px; --card-h:70px }
+  #seats .nick{ left:88px; top:16px; font-size:13px }
+  #seats .stack{ left:88px; bottom:12px; font-size:12px }
+}
+@media (max-width: 520px){
+  :root{ --seat-w:200px; --seat-h:78px; --avatar:48px; --card-w:44px; --card-h:64px }
+  #seats .nick{ left:80px; top:14px; font-size:12px }
+  #seats .stack{ left:80px; bottom:10px; font-size:11px }
+}
