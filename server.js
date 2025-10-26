@@ -53,6 +53,10 @@ CREATE TABLE IF NOT EXISTS game_state (
 `);
 // ===== DRUGI DIO =====
 const app = express();
+
+// VAŽNO: Render / Railway / Heroku rade iza proxyja → bez ovoga Secure cookie NE RADI NA MOBITELIMA
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));
@@ -74,22 +78,30 @@ function currentUser(req){
   if(!req.cookies.uid) return null;
   return db.prepare("SELECT * FROM users WHERE id=?").get(req.cookies.uid);
 }
+
 function requireUser(req,res){
   const u = currentUser(req);
   if(!u){ res.json({ ok:false, error:"login" }); return null; }
   if(u.disabled){ res.json({ ok:false, error:"banned" }); return null; }
   return u;
 }
+
 const SUITS = ["c","d","h","s"];
 const RANKS = ["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+
 function newDeck(){
   const d=[];
   for(const r of RANKS) for(const s of SUITS) d.push(r+s);
-  for(let i=d.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [d[i],d[j]]=[d[j],d[i]]; }
+  for(let i=d.length-1;i>0;i--){
+    const j=(Math.random()*(i+1))|0;
+    [d[i],d[j]]=[d[j],d[i]];
+  }
   return d;
 }
+
 function parseBoard(s){ return s? s.split(",").filter(Boolean):[]; }
 function boardStr(a){ return (a&&a.length)? a.join(",") : ""; }
+
 
 // ===== TREĆI DIO =====
 const GAME = Object.create(null);
@@ -429,8 +441,10 @@ function showdownAndPayout(table, g){
   const upd = db.prepare("UPDATE seats SET stack=? WHERE table_id=? AND seat_index=?");
   for(const i of Object.keys(g.stacks)){ upd.run(g.stacks[i|0], table.id, i|0); }
 }
+ 
 // ===== PETI DIO =====
 // ---------- AUTH ----------
+
 app.post("/api/register",(req,res)=>{
   const { email,password } = req.body||{};
   if(!email || !password || password.length<6) return res.json({ ok:false,error:"missing" });
@@ -438,28 +452,53 @@ app.post("/api/register",(req,res)=>{
     const hash=bcrypt.hashSync(password,10);
     db.prepare("INSERT INTO users(email,pass) VALUES(?,?)").run(email.toLowerCase(),hash);
     res.json({ ok:true });
-  }catch{ res.json({ ok:false,error:"exists" }); }
+  }catch{
+    res.json({ ok:false,error:"exists" });
+  }
 });
+
 app.post("/api/login",(req,res)=>{
   const { email,password } = req.body||{};
   const u=db.prepare("SELECT * FROM users WHERE email=?").get((email||"").toLowerCase());
   if(!u) return res.json({ ok:false,error:"bad" });
   if(!bcrypt.compareSync(password||"",u.pass)) return res.json({ ok:false,error:"bad" });
   if(u.disabled) return res.json({ ok:false,error:"banned" });
-  res.cookie("uid",u.id,{ httpOnly:false, sameSite:"lax" });
+
+  // ✅ SIGURAN COOKIE — radi na PC + mobitelima (HTTPS obavezno)
+  res.cookie("uid", String(u.id), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dana
+  });
+
   res.json({ ok:true });
 });
-app.get("/api/logout",(req,res)=>{ res.clearCookie("uid"); res.json({ ok:true }); });
+
+app.get("/api/logout",(req,res)=>{
+  // ✅ Očisti cookie sa ISTIM atributima
+  res.clearCookie("uid", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/"
+  });
+  res.json({ ok:true });
+});
+
 app.get("/api/me",(req,res)=>{
   const u=currentUser(req);
   if(!u) return res.json({ ok:false });
   res.json({ ok:true, user:{ id:u.id, email:u.email, balance:u.balance, avatar:u.avatar }});
 });
+
 // Avatari
 app.get("/api/avatars",(req,res)=>{
   const list = fs.readdirSync(path.join(__dirname,"public")).filter(f=>/^avatar_\d+\.png$/i.test(f));
   res.json({ ok:true, avatars:list.map(x=>"/"+x) });
 });
+
 app.post("/api/me/avatar",(req,res)=>{
   const u=requireUser(req,res); if(!u) return;
   const { avatar } = req.body||{};
@@ -467,6 +506,8 @@ app.post("/api/me/avatar",(req,res)=>{
   db.prepare("UPDATE users SET avatar=? WHERE id=?").run(avatar,u.id);
   res.json({ ok:true });
 });
+
+
 // ===== ŠESTI DIO =====
 // ---------- ADMIN (NE DIRAMO) ----------
 app.get("/api/admin/users",(req,res)=>{
@@ -488,6 +529,9 @@ app.post("/api/admin/disable",(req,res)=>{
   db.prepare("UPDATE users SET disabled=? WHERE email=?").run(flag?1:0, email.toLowerCase());
   res.json({ ok:true });
 });
+
+
+
 // ===== SEDMI DIO =====
 // ---------- TABLES / LOBBY ----------
 app.post("/api/table/create",(req,res)=>{
@@ -772,6 +816,9 @@ function ensureGameRunning(table_id){
       .run(g.pot|0, g.toAct[0] ?? -1, table_id);
   }
 }
+
+
+
 // ===== OSMI DIO =====
 // ---------- PAGES ----------
 app.get("/", (req, res) => {
