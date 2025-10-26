@@ -90,25 +90,8 @@ function newDeck(){
 }
 function parseBoard(s){ return s? s.split(",").filter(Boolean):[]; }
 function boardStr(a){ return (a&&a.length)? a.join(",") : ""; }
+
 // ===== TREĆI DIO =====
-// --- In-memory game runtime (po stolu) ---
-
-
-GAME[table_id] = {
-  deck: [...], board:[...],
-  hole: { seatIndex: [c1,c2], ... },
-  dealer, street, acting,
-  toAct: [seatIndex,...],
-  yetToAct: Set([...]),
-  sb_i, bb_i,
-  bet: 0,
-  minRaise: 0,
-  committed: { seatIndex: amount },
-  stacks: { seatIndex: stack },
-  allin: Set([...]),
-  pot: 0
-}
-*/
 const GAME = Object.create(null);
 
 function liveSeats(table_id){
@@ -132,7 +115,6 @@ function activeOrder(table_id){
 }
 
 function initHand(table){
-  // kreiraj novo GAME stanje za stol
   const order = activeOrder(table.id);
   if(order.length < 2) return null;
 
@@ -142,12 +124,10 @@ function initHand(table){
   g.hole = {};
   g.pot = 0;
   g.allin = new Set();
-  g.street = "preflop"; // <<< VAŽNO: memorijska faza odmah postavljena
+  g.street = "preflop";
 
-  // dealer rotacija
   let dealer = (db.prepare("SELECT dealer FROM game_state WHERE table_id=?").get(table.id)?.dealer ?? -1);
   dealer = (dealer+1) % table.seats;
-  // odaberi prvog sljedećeg koji je stvarno tu
   if(!order.includes(dealer)){
     const sorted = order.slice().sort((a,b)=>a-b);
     dealer = sorted.find(i=>i>=dealer) ?? sorted[0];
@@ -156,11 +136,9 @@ function initHand(table){
   g.sb_i = order[(order.indexOf(dealer)+1)%order.length];
   g.bb_i = order[(order.indexOf(dealer)+2)%order.length];
 
-  // mirror stacks
   g.stacks = {};
   for(const s of liveSeats(table.id)) g.stacks[s.seat_index] = s.stack|0;
 
-  // auto post SB/BB
   const sbAmt = Math.min(table.sb, g.stacks[g.sb_i]||0);
   const bbAmt = Math.min(table.bb, g.stacks[g.bb_i]||0);
   g.committed = {};
@@ -174,18 +152,15 @@ function initHand(table){
   g.bet = bbAmt;
   g.minRaise = table.bb;
 
-  // podjela hole karata
   for(const i of order){
     const c1 = g.deck.pop(), c2 = g.deck.pop();
     g.hole[i] = [c1,c2];
   }
 
-  // acting red preflop: next nakon BB
   const afterBB = order[(order.indexOf(g.bb_i)+1)%order.length];
   g.toAct = order.slice(order.indexOf(afterBB)).concat(order.slice(0, order.indexOf(afterBB)));
   g.yetToAct = new Set(g.toAct);
 
-  // persist osnovnog GS
   db.prepare("UPDATE game_state SET dealer=?, street=?, board=?, pot=?, acting=? WHERE table_id=?")
     .run(g.dealer, "preflop", "", 0, afterBB, table.id);
 
@@ -215,7 +190,6 @@ function advanceStreet(table, g){
     g.street = "showdown";
   }
 
-  // reset runde
   g.bet = 0;
   g.minRaise = table.bb;
   g.committed = {};
@@ -227,7 +201,6 @@ function advanceStreet(table, g){
   }
   g.yetToAct = new Set(g.toAct.filter(i=>!g.allin.has(i)));
 
-  // update GS
   db.prepare("UPDATE game_state SET street=?, board=?, pot=?, acting=? WHERE table_id=?")
     .run(g.street, boardStr(g.board), g.pot|0, g.toAct[0] ?? -1, table.id);
 }
@@ -249,6 +222,104 @@ function everyoneFoldedExceptOne(g){
   const alive = g.toAct.filter(i=>!g.allin.has(i));
   return alive.length<=1;
 }
+
+// ===== Evaluacija karata =====
+function rankToVal(r){ return "23456789TJQKA".indexOf(r); }
+function isStraight(vals){
+  const v = Array.from(new Set(vals)).sort((a,b)=>a-b);
+  const wheel = [0,1,2,3,12];
+  let best = -1;
+  for(let i=0;i<=v.length-5;i++){
+    const slice = v.slice(i,i+5);
+    if(slice[4]-slice[0]===4){ best = Math.max(best, slice[4]); }
+  }
+  const hasWheel = wheel.every(x=>v.includes(x));
+  if(hasWheel) best = Math.max(best, 3);
+  return best;
+}
+function handScore7(cards7){
+  const ranks = cards7.map(c=>rankToVal(c[0])).sort((a,b)=>a-b);
+  const suits = cards7.map(c=>c[1]);
+  const byRank = {};
+  for(const c of cards7){ const v=rankToVal(c[0]); (byRank[v] ||= []).push(c); }
+  const bySuit = {};
+  for(const c of cards7){ const s = c[1]; (bySuit[s] ||= []).push(c); }
+  let flushSuit = null;
+  for(const s of SUITS){ if((bySuit[s]?.length||0)>=5){ flushSuit=s; break; } }
+  const valsAsc = ranks;
+  const straightHigh = isStraight(valsAsc);
+  let straightFlushHigh = -1;
+  if(flushSuit){
+    const valsFlush = bySuit[flushSuit].map(c=>rankToVal(c[0])).sort((a,b)=>a-b);
+    const sfh = isStraight(valsFlush);
+    if(sfh>=0) straightFlushHigh = sfh;
+  }
+  const groups = Object.entries(byRank).map(([v,arr])=>({v:parseInt(v,10), n:arr.length})).sort((a,b)=>b.n-a.n || b.v-a.v);
+  if(straightFlushHigh>=0) return [8, straightFlushHigh];
+  if(groups[0].n===4){
+    const four=groups[0].v, kick=Math.max(...valsAsc.filter(v=>v!==four));
+    return [7, four, kick];
+  }
+  if(groups[0].n===3 && groups[1]?.n>=2){
+    return [6, groups[0].v, groups[1].v];
+  }
+  if(flushSuit){
+    const top = bySuit[flushSuit].map(c=>rankToVal(c[0])).sort((a,b)=>b-a).slice(0,5);
+    return [5, ...top];
+  }
+  if(straightHigh>=0) return [4, straightHigh];
+  if(groups[0].n===3){
+    const trips=groups[0].v;
+    const kicks = valsAsc.filter(v=>v!==trips).sort((a,b)=>b-a).slice(0,2);
+    return [3, trips, ...kicks];
+  }
+  if(groups[0].n===2 && groups[1]?.n===2){
+    const hp=Math.max(groups[0].v, groups[1].v);
+    const lp=Math.min(groups[0].v, groups[1].v);
+    const kick=Math.max(...valsAsc.filter(v=>v!==hp && v!==lp));
+    return [2, hp, lp, kick];
+  }
+  if(groups[0].n===2){
+    const p=groups[0].v;
+    const kicks=valsAsc.filter(v=>v!==p).sort((a,b)=>b-a).slice(0,3);
+    return [1, p, ...kicks];
+  }
+  const highs = valsAsc.slice().sort((a,b)=>b-a).slice(0,5);
+  return [0, ...highs];
+}
+
+function compareScore(a,b){
+  for(let i=0;i<Math.max(a.length,b.length);i++){
+    const x=a[i]||0, y=b[i]||0;
+    if(x!==y) return x-y;
+  }
+  return 0;
+}
+
+function showdownAndPayout(table, g){
+  const order = activeOrder(table.id);
+  const contenders = order.filter(i => (g.hole[i] && ((g.stacks[i]||0)>0 || (g.committed[i]||0)>0 || g.allin.has(i)) ) );
+  if(contenders.length===0){
+    g.pot += Object.values(g.committed||{}).reduce((a,b)=>a+(b|0),0);
+    g.committed={};
+    return;
+  }
+  pushPotFromCommitted(g);
+  const board5 = g.board.slice(0,5);
+  const scored = contenders.map(i => ({ i, score: handScore7([...board5, ...g.hole[i]]) }));
+  scored.sort((A,B)=>compareScore(A.score,B.score));
+  const best = scored[scored.length-1].score;
+  const winners = scored.filter(x=>compareScore(x.score,best)===0).map(x=>x.i);
+  const share = Math.floor(g.pot / winners.length);
+  for(const i of winners){ g.stacks[i] = (g.stacks[i]||0) + share; }
+  const remainder = g.pot - share*winners.length;
+  if(remainder>0) g.stacks[winners[0]] += remainder;
+  g.pot = 0;
+  const upd = db.prepare("UPDATE seats SET stack=? WHERE table_id=? AND seat_index=?");
+  for(const i of Object.keys(g.stacks)){ upd.run(g.stacks[i|0], table.id, i|0); }
+}
+
+
 // ===== ČETVRTI DIO =====
 // --- HAND EVALUATOR (7 → 5 best) ---
 function rankToVal(r){ return "23456789TJQKA".indexOf(r); }
