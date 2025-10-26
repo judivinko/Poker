@@ -129,132 +129,279 @@ h1{ text-align:center; margin:6px 0 10px; }
 
   
   
- <!-- ===== DIO 2/2 (SCRIPT) ===== -->
+<!-- ===== DIO 2/2 (SCRIPT — ES5 SAFE + DIJAGNOSTIKA) ===== -->
 <script>
-const $=s=>document.querySelector(s);
-let ME=null;
-
-async function me(){
-  const r = await fetch("/api/me",{credentials:"include"}).then(r=>r.json()).catch(()=>null);
-  if(r?.ok){
-    ME=r.user;
-    $("#auth").classList.add("hidden");
-    $("#who").classList.remove("hidden");
-    $("#who-email").textContent=ME.email;
-    $("#who-balance").textContent=ME.balance+" čipova";
-    $("#who-avatar").src=ME.avatar||"/avatar_1.png";
-  }else{
-    ME=null;
-    $("#auth").classList.remove("hidden");
-    $("#who").classList.add("hidden");
-  }
-}
-
-$("#btn-login").onclick=async()=>{
-  const email=$("#login-email").value.trim();
-  const pass=$("#login-pass").value;
-  const r=await fetch("/api/login",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    credentials:"include",
-    body:JSON.stringify({email,password:pass})
-  }).then(r=>r.json());
-  $("#auth-msg").textContent=r.ok?"Ulogiran.":(r.error||"Greška");
-  await me(); await loadTables();
-};
-$("#btn-register").onclick=async()=>{
-  const email=$("#reg-email").value.trim();
-  const pass=$("#reg-pass").value;
-  const r=await fetch("/api/register",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    credentials:"include",
-    body:JSON.stringify({email,password:pass})
-  }).then(r=>r.json());
-  $("#auth-msg").textContent=r.ok?"Račun kreiran. Logiraj se.":(r.error||"Greška");
-};
-$("#btn-logout").onclick=async()=>{
-  await fetch("/api/logout",{credentials:"include"});
-  await me(); await loadTables();
-};
-
-async function loadTables(){
-  const r=await fetch("/api/tables").then(r=>r.json()).catch(()=>null);
-  const box=$("#list"); box.innerHTML="";
-  if(!r?.ok || !r.tables.length){ box.textContent="Nema stolova."; return; }
-  for(const t of r.tables){
-    const div=document.createElement("div");
-    div.className="item";
-    div.innerHTML=`<div>#${t.id} • ${t.players}/${t.seats} • SB:${t.sb} BB:${t.bb}</div>
-                   <button>Join</button>`;
-    div.querySelector("button").onclick=()=>openJoin(t);
-    box.appendChild(div);
-  }
-}
-$("#btn-refresh").onclick=loadTables;
-
-$("#btn-open-make").onclick=()=>{$("#make-box").style.display="flex";}
-$("#btn-close-make").onclick=()=>{$("#make-box").style.display="none";}
-$("#btn-create").onclick=async()=>{
-  const seats=$("#make-seats").value|0;
-  const sb=$("#make-sb").value|0;
-  const bb=$("#make-bb").value|0;
-  const r=await fetch("/api/table/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({seats,sb,bb}),credentials:"include"}).then(r=>r.json());
-  if(r.ok){ location.href = "/table?id="+r.table_id; $("#make-box").style.display="none"; }
-  else $("#make-msg").textContent=r.error||"Greška";
-};
-
-let JOIN_TABLE=null;
-function openJoin(t){
-  JOIN_TABLE=t;
-  $("#join-id").textContent=t.id;
-  $("#join-box").style.display="flex";
-  const sel=$("#join-seat"); sel.innerHTML="";
-  for(let i=0;i<t.seats;i++) sel.innerHTML+=`<option value="${i}">Seat ${i+1}</option>`;
-  const min=t.bb*50, max=t.bb*200;
-  $("#join-range").textContent=`Buy-in: ${min} – ${max}`;
-  $("#join-buy").value=min;
-}
-$("#btn-close-join").onclick=()=>$("#join-box").style.display="none";
-$("#btn-join-confirm").onclick=async()=>{
-  const seat_index=$("#join-seat").value|0;
-  const buyin=$("#join-buy").value|0;
-  const r=await fetch("/api/table/join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({table_id:JOIN_TABLE.id,seat_index,buyin}),credentials:"include"}).then(r=>r.json());
-  if(r.ok){ location.href = "/table?id="+JOIN_TABLE.id; $("#join-box").style.display="none"; }
-  else $("#join-msg").textContent=r.error||"Greška";
-};
-
-$("#btn-open-profile").onclick=async()=>{
-  if(!ME) await me();
-  $("#profile-email").textContent=ME.email;
-  $("#profile-balance").textContent=ME.balance+" čipova";
-  $("#profile-avatar-preview").src=ME.avatar||"/avatar_1.png";
-  const r=await fetch("/api/avatars").then(r=>r.json()).catch(()=>null);
-  const grid=$("#avatar-grid"); grid.innerHTML="";
-  (r?.avatars||[]).forEach(src=>{
-    const img=document.createElement("img");
-    img.className="avatar"; img.src=src;
-    img.onclick=async()=>{
-      const rr=await fetch("/api/me/avatar",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({avatar:src})}).then(x=>x.json());
-      if(rr?.ok){ $("#profile-avatar-preview").src=src; await me(); $("#profile-msg").textContent="Avatar promijenjen."; }
-      else $("#profile-msg").textContent="Greška.";
-    };
-    grid.appendChild(img);
+/* ---------- Dijagnostički HUD (vidiš greške na ekranu) ---------- */
+(function(){
+  var box = document.createElement("div");
+  box.id = "diag";
+  box.style.cssText = "position:fixed;left:8px;bottom:8px;max-width:90vw;background:#0b1220;border:1px solid #243041;color:#e5e7eb;border-radius:10px;padding:8px 10px;font:12px/1.3 system-ui;z-index:99999;opacity:.92;display:none;white-space:pre-wrap;";
+  document.addEventListener("keydown", function(e){
+    // Toggle HUD (Ctrl+D)
+    if((e.ctrlKey||e.metaKey) && (e.key==="d"||e.key==="D")){
+      box.style.display = (box.style.display==="none"?"block":"none");
+    }
   });
-  $("#profile-box").style.display="flex";
-};
-$("#btn-close-profile").onclick=()=>$("#profile-box").style.display="none";
+  function push(msg){
+    box.style.display = "block";
+    var p = document.createElement("div");
+    p.textContent = msg;
+    box.appendChild(p);
+  }
+  window.__diag = {push: push};
+  document.body ? document.body.appendChild(box) : window.addEventListener("DOMContentLoaded", function(){ document.body.appendChild(box); });
 
+  window.addEventListener("error", function(e){ push("JS Error: " + (e.message||"") + " @ " + (e.filename||"") + ":" + (e.lineno||"")); });
+  window.addEventListener("unhandledrejection", function(e){ push("Promise Rejection: " + (e.reason && (e.reason.message||e.reason)) ); });
+})();
+
+/* ---------- Helperi ---------- */
+function $(s){ return document.querySelector(s); }
+var ME = null;
+var VERSION_BUST = "v3"; // promijeni npr. u v4 kad želiš hard refresh
+
+// fetch s timeoutom + include credentials by default
+function safeFetch(url, opts){
+  opts = opts || {};
+  if (!opts.headers) opts.headers = {};
+  if (typeof opts.credentials === "undefined") opts.credentials = "include";
+
+  // cache-bust za GET upite
+  if (!opts.method || opts.method.toUpperCase() === "GET") {
+    var sep = url.indexOf("?")>=0 ? "&" : "?";
+    url = url + sep + "_v=" + VERSION_BUST;
+  }
+
+  var timeout = opts.timeout || 12000;
+  var ctrl = (window.AbortController ? new AbortController() : null);
+  if (ctrl) { opts.signal = ctrl.signal; }
+  var to = setTimeout(function(){ if (ctrl) ctrl.abort(); }, timeout);
+
+  return fetch(url, opts).then(function(r){ clearTimeout(to); return r; }).catch(function(err){
+    if (window.__diag) __diag.push("Network error ("+url+"): " + (err && err.message ? err.message : err));
+    throw err;
+  });
+}
+
+/* ---------- App logika (ES5 kompatibilno) ---------- */
+function me(){
+  return safeFetch("/api/me")
+    .then(function(r){ return r.json(); })
+    .catch(function(){ return null; })
+    .then(function(r){
+      if (r && r.ok) {
+        ME = r.user;
+        $("#auth").classList.add("hidden");
+        $("#who").classList.remove("hidden");
+        $("#who-email").textContent = ME.email;
+        $("#who-balance").textContent = ME.balance + " čipova";
+        $("#who-avatar").src = ME.avatar || "/avatar_1.png";
+      } else {
+        ME = null;
+        $("#auth").classList.remove("hidden");
+        $("#who").classList.add("hidden");
+      }
+    });
+}
+
+$("#btn-login").onclick = function(){
+  var email = $("#login-email").value.trim();
+  var pass  = $("#login-pass").value;
+  return safeFetch("/api/login",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({email:email, password:pass})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(r){
+    $("#auth-msg").textContent = r.ok ? "Ulogiran." : (r.error || "Greška");
+    if (!r.ok && window.__diag) __diag.push("Login fail: " + (r.error||"unknown"));
+    return me().then(loadTables);
+  })
+  .catch(function(e){
+    $("#auth-msg").textContent = "Mrežna greška";
+  });
+};
+
+$("#btn-register").onclick = function(){
+  var email = $("#reg-email").value.trim();
+  var pass  = $("#reg-pass").value;
+  return safeFetch("/api/register",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({email:email, password:pass})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(r){
+    $("#auth-msg").textContent = r.ok ? "Račun kreiran. Logiraj se." : (r.error || "Greška");
+    if (!r.ok && window.__diag) __diag.push("Register fail: " + (r.error||"unknown"));
+  })
+  .catch(function(){ $("#auth-msg").textContent = "Mrežna greška"; });
+};
+
+$("#btn-logout").onclick = function(){
+  return safeFetch("/api/logout").then(function(){
+    return me().then(loadTables);
+  }).catch(function(){ /* ignoriši */ });
+};
+
+function loadTables(){
+  return safeFetch("/api/tables")
+    .then(function(r){ return r.json(); })
+    .catch(function(){ return null; })
+    .then(function(r){
+      var box = $("#list");
+      box.innerHTML = "";
+      if (!r || !r.ok || !r.tables || !r.tables.length) {
+        box.textContent = "Nema stolova.";
+        if (window.__diag && (!r || !r.ok)) __diag.push("Tables fail: " + (r && r.error ? r.error : "no data"));
+        return;
+      }
+      for (var i=0;i<r.tables.length;i++){
+        var t = r.tables[i];
+        var div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = '<div>#'+t.id+' • '+t.players+'/'+t.seats+' • SB:'+t.sb+' BB:'+t.bb+'</div><button>Join</button>';
+        div.querySelector("button").onclick = (function(tt){
+          return function(){ openJoin(tt); };
+        })(t);
+        box.appendChild(div);
+      }
+    });
+}
+$("#btn-refresh").onclick = loadTables;
+
+$("#btn-open-make").onclick  = function(){ $("#make-box").style.display = "flex"; };
+$("#btn-close-make").onclick = function(){ $("#make-box").style.display = "none"; };
+$("#btn-create").onclick     = function(){
+  var seats = parseInt($("#make-seats").value,10) || 0;
+  var sb    = parseInt($("#make-sb").value,10)    || 0;
+  var bb    = parseInt($("#make-bb").value,10)    || 0;
+  return safeFetch("/api/table/create",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({seats:seats,sb:sb,bb:bb})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(r){
+    if (r && r.ok) {
+      $("#make-box").style.display = "none";
+      location.href = "/table?id=" + r.table_id;
+    } else {
+      $("#make-msg").textContent = (r && r.error) ? r.error : "Greška";
+      if (window.__diag) __diag.push("Create table fail: " + (r && r.error ? r.error : "unknown"));
+    }
+  })
+  .catch(function(e){ $("#make-msg").textContent = "Mrežna greška"; });
+};
+
+var JOIN_TABLE = null;
+function openJoin(t){
+  JOIN_TABLE = t;
+  $("#join-id").textContent = t.id;
+  $("#join-box").style.display = "flex";
+  var sel = $("#join-seat");
+  sel.innerHTML = "";
+  for (var i=0;i<t.seats;i++){
+    sel.innerHTML += '<option value="'+i+'">Seat '+(i+1)+'</option>';
+  }
+  var min = t.bb*50, max = t.bb*200;
+  $("#join-range").textContent = "Buy-in: " + min + " – " + max;
+  $("#join-buy").value = min;
+}
+$("#btn-close-join").onclick = function(){ $("#join-box").style.display = "none"; };
+$("#btn-join-confirm").onclick = function(){
+  if (!JOIN_TABLE) return;
+  var seat_index = parseInt($("#join-seat").value,10) || 0;
+  var buyin      = parseInt($("#join-buy").value,10) || 0;
+  return safeFetch("/api/table/join",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({table_id:JOIN_TABLE.id, seat_index:seat_index, buyin:buyin})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(r){
+    if (r && r.ok) {
+      $("#join-box").style.display = "none";
+      location.href = "/table?id=" + JOIN_TABLE.id;
+    } else {
+      $("#join-msg").textContent = (r && r.error) ? r.error : "Greška";
+      if (window.__diag) __diag.push("Join fail: " + (r && r.error ? r.error : "unknown"));
+    }
+  })
+  .catch(function(){ $("#join-msg").textContent = "Mrežna greška"; });
+};
+
+$("#btn-open-profile").onclick = function(){
+  function afterMe(){
+    $("#profile-email").textContent   = ME.email;
+    $("#profile-balance").textContent = ME.balance + " čipova";
+    $("#profile-avatar-preview").src  = ME.avatar || "/avatar_1.png";
+    return safeFetch("/api/avatars")
+      .then(function(r){ return r.json(); })
+      .catch(function(){ return null; })
+      .then(function(r){
+        var grid = $("#avatar-grid");
+        grid.innerHTML = "";
+        var avatars = (r && r.avatars) ? r.avatars : [];
+        for (var i=0;i<avatars.length;i++){
+          (function(src){
+            var img = document.createElement("img");
+            img.className = "avatar";
+            img.src = src;
+            img.onclick = function(){
+              safeFetch("/api/me/avatar",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({avatar:src})
+              })
+              .then(function(x){ return x.json(); })
+              .then(function(rr){
+                if (rr && rr.ok){
+                  $("#profile-avatar-preview").src = src;
+                  me().then(function(){
+                    $("#profile-msg").textContent = "Avatar promijenjen.";
+                  });
+                } else {
+                  $("#profile-msg").textContent = "Greška.";
+                }
+              })
+              .catch(function(){ $("#profile-msg").textContent = "Mrežna greška"; });
+            };
+            grid.appendChild(img);
+          })(avatars[i]);
+        }
+        $("#profile-box").style.display = "flex";
+      });
+  }
+  if (!ME) { me().then(afterMe); } else { afterMe(); }
+};
+$("#btn-close-profile").onclick = function(){ $("#profile-box").style.display = "none"; };
+
+/* ---------- WebSocket sa dijagnostikom ---------- */
 function connectWS(){
-  const ws = new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host);
-  ws.onmessage=ev=>{ try{ const m=JSON.parse(ev.data); if(m.type==="lobby") loadTables(); }catch{} };
-  ws.onclose=()=>setTimeout(connectWS,1200);
+  var proto = (location.protocol === "https:") ? "wss" : "ws";
+  try{
+    var ws = new WebSocket(proto + "://" + location.host);
+    ws.onmessage = function(ev){
+      try {
+        var m = JSON.parse(ev.data);
+        if (m && m.type === "lobby") loadTables();
+      } catch(e){}
+    };
+    ws.onclose = function(){ setTimeout(connectWS, 1200); };
+    ws.onerror = function(){ if (window.__diag) __diag.push("WebSocket error (možda blokiran na mreži)"); };
+  }catch(err){
+    if (window.__diag) __diag.push("WS init fail: " + (err && err.message ? err.message : err));
+  }
 }
 connectWS();
 
-(async()=>{ await me(); await loadTables(); })();
+/* ---------- Init ---------- */
+(function init(){
+  me().then(loadTables)
+     .catch(function(e){ if (window.__diag) __diag.push("Init fail: " + e); });
+})();
 </script>
 </body>
 </html>
-
-  
