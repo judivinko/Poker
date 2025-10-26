@@ -1,42 +1,66 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Poker Table</title>
 <link rel="stylesheet" href="/game.css">
+<style>
+body{ margin:0; background:#0b0d13; color:#fff; font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; }
+.hidden{ display:none !important; }
+.wrap{ position:relative; width:100vw; height:100vh; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+#table{ position:relative; width:min(100vw,100vh); height:min(100vw,100vh); background:url('/poker_table.png') center/contain no-repeat; }
+.seat{ position:absolute; text-align:center; width:90px; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; }
+.seat .avatar{ width:48px; height:48px; border-radius:50%; border:2px solid #233047; object-fit:cover; margin-bottom:4px; }
+.seat .nick{ font-size:13px; }
+.seat .stack{ font-size:12px; opacity:.85; }
+.badges{ display:flex; gap:4px; margin-top:2px; }
+.badge{ font-size:11px; background:#22d3ee; color:#000; padding:1px 4px; border-radius:4px; }
+#board{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); display:flex; gap:8px; }
+.card{ width:55px; height:80px; background-size:cover; border-radius:6px; }
+#pot{ position:absolute; top:50%; left:50%; transform:translate(-50%,-120%); font-size:16px; opacity:.9; }
+#status{ position:absolute; bottom:8%; left:50%; transform:translateX(-50%); opacity:.8; font-size:16px; }
+#actions{ position:absolute; bottom:5%; left:50%; transform:translateX(-50%); display:flex; gap:10px; }
+#actions button{ padding:8px 16px; font-size:14px; font-weight:700; border-radius:6px; border:none; cursor:pointer; background:#22d3ee; color:#000; }
+#bet-box{ position:absolute; bottom:18%; left:50%; transform:translateX(-50%); display:flex; gap:6px; }
+#bet-box input{ width:80px; padding:6px; border-radius:6px; background:#111722; border:1px solid #233047; color:#fff; text-align:center; }
+</style>
 </head>
 <body>
 
 <div class="wrap">
+  <div id="table">
 
-  <div class="status" id="status">Loading table...</div>
+    <div id="pot">—</div>
+    <div id="board"></div>
+    <div id="status">Učitavanje…</div>
 
-  <div id="table" class="table" data-seats="9">
-    <div class="board" id="board">
-      <!-- JS ubacuje karte -->
+    <!-- Sjedišta (maks 9, pozicije će namjestiti table.js) -->
+    <div class="seat" data-i="0"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="1"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="2"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="3"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="4"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="5"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="6"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="7"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+    <div class="seat" data-i="8"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
+
+    <!-- BET INPUT -->
+    <div id="bet-box" class="hidden">
+      <input id="bet-amount" type="number" value="0">
+      <button onclick="sendBet()">Bet</button>
     </div>
 
-    <!-- 9 mjesta (auto radi i za 2-9 sjedala) -->
-    <div class="seat" data-i="0"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="1"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="2"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="3"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="4"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="5"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="6"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="7"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
-    <div class="seat" data-i="8"><div class="avatar placeholder"></div><div class="nick"></div><div class="stack"></div><div class="timer"></div><div class="badges"></div></div>
+    <!-- ACTION BUTTONS -->
+    <div id="actions" class="hidden">
+      <button onclick="sendFold()">Fold</button>
+      <button onclick="sendCheck()">Check</button>
+      <button onclick="sendCall()">Call</button>
+      <button onclick="openBet()">Bet/Raise</button>
+    </div>
 
   </div>
-
-  <div class="actions" id="actions">
-    <button onclick="fold()">Fold</button>
-    <button onclick="check()">Check</button>
-    <button onclick="call()">Call</button>
-    <button onclick="bet()">Bet</button>
-  </div>
-
 </div>
 
 <script src="/table.js"></script>
