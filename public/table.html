@@ -6,6 +6,7 @@
 <title>Poker Table</title>
 <link rel="stylesheet" href="/game.css">
 <style>
+/* samo malo UI-a za modale/topbar */
 .hidden{display:none!important}
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
 .modal{width:min(92vw,380px);background:#0f1624;border:1px solid #233047;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
@@ -13,17 +14,20 @@
 .modal input,.modal select{background:#0b1220;border:1px solid #233047;border-radius:10px;padding:10px;color:#e5e7eb}
 .modal button{background:#22d3ee;color:#000;border:none;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer}
 .modal button.secondary{background:#2b3445;color:#e5e7eb}
-#topbar{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:40;display:flex;gap:8px}
-#topbar .pill{background:#0f1624;border:1px solid #233047;border-radius:999px;padding:6px 12px}
+#topbar{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:40;display:flex;gap:8px;align-items:center}
+.pill{background:#0f1624;border:1px solid #233047;border-radius:999px;padding:6px 12px;color:#e5e7eb}
+.pill.btn{cursor:pointer;font-weight:800}
+.badge.img img{display:block;width:18px;height:18px}
 </style>
 </head>
 <body>
 
+<!-- Top bar: info + kontrole stola -->
 <div id="topbar" class="hidden">
   <div id="info-pill" class="pill">—</div>
-  <button id="btn-open-join" class="pill hidden">Join</button>
-  <button id="btn-open-topup" class="pill hidden">Dodaj čipove</button>
-  <button id="btn-leave" class="pill hidden">Napusti</button>
+  <button id="btn-open-join" class="pill btn hidden">Join</button>
+  <button id="btn-open-topup" class="pill btn hidden">Dodaj čipove</button>
+  <button id="btn-leave" class="pill btn hidden">Napusti</button>
 </div>
 
 <div class="wrap">
@@ -32,7 +36,7 @@
     <div id="board"></div>
     <div id="status">Učitavanje…</div>
 
-    <!-- 9 seats -->
+    <!-- 9 mjesta UVIJEK prisutna (krug) -->
     <div class="seat" data-i="0"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
     <div class="seat" data-i="1"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
     <div class="seat" data-i="2"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
@@ -67,7 +71,7 @@
     <select id="join-seat"></select>
     <label>Buy-in (min–max)</label>
     <input id="join-buy" type="number" value="0" min="0" step="1">
-    <div id="join-range" style="color:#94a3b8"></div>
+    <div id="join-range" style="color:#94a3b8">—</div>
     <div class="row">
       <button id="btn-join-confirm">Join</button>
       <button class="secondary" id="btn-close-join">Zatvori</button>
