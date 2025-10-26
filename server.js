@@ -702,9 +702,49 @@ function ensureGameRunning(table_id){
 }
 // ===== OSMI DIO =====
 // ---------- PAGES ----------
-app.get("/",(req,res)=>res.sendFile(path.join(__dirname,"public/index.html")));
-app.get("/table",(req,res)=>res.sendFile(path.join(__dirname,"public/table.html")));
-app.get("/admin",(req,res)=>res.sendFile(path.join(__dirname,"public/admin.html")));
+app.get("/", (req, res) => {
+  const idx = path.join(__dirname, "public", "index.html");
+  if (fs.existsSync(idx)) return res.sendFile(idx);
+
+  // Fallback da root UVIJEK radi i kad index.html fali ili je krivo imenovan
+  res
+    .status(200)
+    .type("html")
+    .send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Poker Lobby</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body style="background:#0b1220;color:#e5e7eb;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif">
+  <div style="max-width:760px;margin:40px auto;padding:16px">
+    <h1 style="margin:0 0 12px">Poker server je online ✅</h1>
+    <p>Frontend <code>/public/index.html</code> nije pronađen. Ali server radi. Brzi linkovi:</p>
+    <ul>
+      <li><a href="/healthz">/healthz</a> — health</li>
+      <li><a href="/health">/health</a> — health JSON</li>
+      <li><a href="/admin">/admin</a></li>
+      <li><a href="/table">/table</a></li>
+      <li><a href="/api/tables">/api/tables</a></li>
+    </ul>
+  </div>
+</body>
+</html>`);
+});
+
+app.get("/table", (req, res) => {
+  const p = path.join(__dirname, "public", "table.html");
+  if (fs.existsSync(p)) return res.sendFile(p);
+  res.status(404).send("table.html not found in /public");
+});
+
+app.get("/admin", (req, res) => {
+  const p = path.join(__dirname, "public", "admin.html");
+  if (fs.existsSync(p)) return res.sendFile(p);
+  res.status(404).send("admin.html not found in /public");
+});
 
 // ---------- WS ----------
 const server = http.createServer(app);
@@ -737,7 +777,7 @@ wss.on("connection",(ws)=>{
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 app.get("/health",  (_req, res) => res.json({ ok:true, ts: Date.now() }));
 
-// --- Start server (render-compatible, dostupno sa svih uređaja) ---
+// --- Start server ---
 server.listen(PORT, HOST, () => {
   console.log(`✅ Poker server running at http://${HOST}:${PORT}`);
 });
