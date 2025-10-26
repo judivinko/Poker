@@ -31,7 +31,6 @@ h1{ text-align:center; margin:6px 0 10px; }
 
   <h1>POKER LOBBY</h1>
 
-  <!-- AUTH -->
   <section class="card" id="auth">
     <div class="row" style="justify-content:space-between;">
       <div class="col" style="min-width:280px;flex:1">
@@ -50,7 +49,6 @@ h1{ text-align:center; margin:6px 0 10px; }
     <div id="auth-msg" class="muted" style="margin-top:6px;"></div>
   </section>
 
-  <!-- WHO -->
   <section class="card hidden" id="who">
     <div class="row" style="justify-content:space-between;">
       <div class="row" style="gap:12px;">
@@ -68,7 +66,6 @@ h1{ text-align:center; margin:6px 0 10px; }
     </div>
   </section>
 
-  <!-- LOBBY -->
   <section class="card">
     <div class="row" style="justify-content:space-between;">
       <div class="muted">Stolovi</div>
@@ -79,7 +76,6 @@ h1{ text-align:center; margin:6px 0 10px; }
 
 </div>
 
-<!-- CREATE TABLE -->
 <div id="make-box">
   <div class="modal">
     <div class="muted" style="font-weight:800;">Kreiraj sto</div>
@@ -97,13 +93,12 @@ h1{ text-align:center; margin:6px 0 10px; }
   </div>
 </div>
 
-<!-- JOIN -->
 <div id="join-box">
   <div class="modal">
     <div class="muted" style="font-weight:800;">Join Sto #<span id="join-id"></span></div>
     <label>Sjedalo</label>
     <select id="join-seat"></select>
-    <label>Buy-in (min-max automatski)</label>
+    <label>Buy-in (min-max)</label>
     <input id="join-buy" type="number" value="0">
     <div id="join-range" class="muted"></div>
     <div class="row">
@@ -114,7 +109,6 @@ h1{ text-align:center; margin:6px 0 10px; }
   </div>
 </div>
 
-<!-- PROFILE -->
 <div id="profile-box">
   <div class="modal">
     <div class="muted" style="font-weight:800;">Tvoj profil</div>
@@ -136,7 +130,6 @@ h1{ text-align:center; margin:6px 0 10px; }
 const $=s=>document.querySelector(s);
 let ME=null;
 
-// --- AUTH ---
 async function me(){
   const r = await fetch("/api/me",{credentials:"include"}).then(r=>r.json()).catch(()=>null);
   if(r?.ok){
@@ -152,6 +145,7 @@ async function me(){
     $("#who").classList.add("hidden");
   }
 }
+
 $("#btn-login").onclick=async()=>{
   const email=$("#login-email").value.trim();
   const pass=$("#login-pass").value;
@@ -167,7 +161,6 @@ $("#btn-register").onclick=async()=>{
 };
 $("#btn-logout").onclick=async()=>{ await fetch("/api/logout"); await me(); await loadTables(); };
 
-// --- LOBBY ---
 async function loadTables(){
   const r=await fetch("/api/tables").then(r=>r.json()).catch(()=>null);
   const box=$("#list"); box.innerHTML="";
@@ -183,7 +176,6 @@ async function loadTables(){
 }
 $("#btn-refresh").onclick=loadTables;
 
-// --- CREATE TABLE ---
 $("#btn-open-make").onclick=()=>{$("#make-box").style.display="flex";}
 $("#btn-close-make").onclick=()=>{$("#make-box").style.display="none";}
 $("#btn-create").onclick=async()=>{
@@ -191,11 +183,10 @@ $("#btn-create").onclick=async()=>{
   const sb=$("#make-sb").value|0;
   const bb=$("#make-bb").value|0;
   const r=await fetch("/api/table/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({seats,sb,bb}),credentials:"include"}).then(r=>r.json());
-  if(r.ok){ window.open("/table?id="+r.table_id,"_blank"); $("#make-box").style.display="none"; }
+  if(r.ok){ location.href = "/table?id="+r.table_id; $("#make-box").style.display="none"; }
   else $("#make-msg").textContent=r.error||"Greška";
 };
 
-// --- JOIN ---
 let JOIN_TABLE=null;
 function openJoin(t){
   JOIN_TABLE=t;
@@ -212,11 +203,10 @@ $("#btn-join-confirm").onclick=async()=>{
   const seat_index=$("#join-seat").value|0;
   const buyin=$("#join-buy").value|0;
   const r=await fetch("/api/table/join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({table_id:JOIN_TABLE.id,seat_index,buyin}),credentials:"include"}).then(r=>r.json());
-  if(r.ok){ window.open("/table?id="+JOIN_TABLE.id,"_blank"); $("#join-box").style.display="none"; }
+  if(r.ok){ location.href = "/table?id="+JOIN_TABLE.id; $("#join-box").style.display="none"; }
   else $("#join-msg").textContent=r.error||"Greška";
 };
 
-// --- PROFILE / AVATARS ---
 $("#btn-open-profile").onclick=async()=>{
   if(!ME) await me();
   $("#profile-email").textContent=ME.email;
@@ -226,7 +216,7 @@ $("#btn-open-profile").onclick=async()=>{
   const grid=$("#avatar-grid"); grid.innerHTML="";
   (r?.avatars||[]).forEach(src=>{
     const img=document.createElement("img");
-    img.className="avatar"; img.src=src; img.title=src.split("/").pop();
+    img.className="avatar"; img.src=src;
     img.onclick=async()=>{
       const rr=await fetch("/api/me/avatar",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({avatar:src})}).then(x=>x.json());
       if(rr?.ok){ $("#profile-avatar-preview").src=src; await me(); $("#profile-msg").textContent="Avatar promijenjen."; }
@@ -238,15 +228,13 @@ $("#btn-open-profile").onclick=async()=>{
 };
 $("#btn-close-profile").onclick=()=>$("#profile-box").style.display="none";
 
-// --- WS lobby refresh ---
 function connectWS(){
-  const ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host);
+  const ws = new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host);
   ws.onmessage=ev=>{ try{ const m=JSON.parse(ev.data); if(m.type==="lobby") loadTables(); }catch{} };
   ws.onclose=()=>setTimeout(connectWS,1200);
 }
 connectWS();
 
-// --- BOOT ---
 (async()=>{ await me(); await loadTables(); })();
 </script>
 </body>
