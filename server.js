@@ -54,7 +54,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));
 
-// --- Aliasi za nazive slika, ako imaš card_ bach.png / css.app ---
+// --- Aliasi za nazive slika (radi razmaka u card_ bach.png) ---
 app.get("/card_back.png",(req,res)=>{
   const p = path.join(__dirname,"public","card_ bach.png");
   if(fs.existsSync(p)) return res.sendFile(p);
@@ -73,8 +73,8 @@ function currentUser(req){
 }
 function requireUser(req,res){
   const u = currentUser(req);
-  if(!u) return res.json({ ok:false, error:"login" });
-  if(u.disabled) return res.json({ ok:false, error:"banned" });
+  if(!u){ res.json({ ok:false, error:"login" }); return null; }
+  if(u.disabled){ res.json({ ok:false, error:"banned" }); return null; }
   return u;
 }
 const SUITS = ["c","d","h","s"];
@@ -82,7 +82,7 @@ const RANKS = ["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
 function newDeck(){
   const d=[];
   for(const r of RANKS) for(const s of SUITS) d.push(r+s);
-  for(let i=d.length-1;i>0;i--){ const j=(Math.random()* (i+1))|0; [d[i],d[j]]=[d[j],d[i]]; }
+  for(let i=d.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [d[i],d[j]]=[d[j],d[i]]; }
   return d;
 }
 function parseBoard(s){ return s? s.split(",").filter(Boolean):[]; }
@@ -94,13 +94,13 @@ GAME[table_id] = {
   deck: [...], board:[...],
   hole: { seatIndex: [c1,c2], ... },
   dealer, street, acting,
-  toAct: [seatIndex,...], // red poteza u rundi
+  toAct: [seatIndex,...],
   yetToAct: Set([...]),
   sb_i, bb_i,
-  bet: 0,          // trenutni bet na stolu
+  bet: 0,
   minRaise: 0,
-  committed: { seatIndex: amount }, // suma u tekućoj rundi
-  stacks: { seatIndex: stack },     // mirror iz DB-a (radi brzine)
+  committed: { seatIndex: amount },
+  stacks: { seatIndex: stack },
   allin: Set([...]),
   pot: 0
 }
@@ -108,11 +108,9 @@ GAME[table_id] = {
 const GAME = Object.create(null);
 
 function liveSeats(table_id){
-  // vrati popis {i,user_id,stack} samo zauzetih sjedala poredanih po i
   const rows = db.prepare("SELECT seat_index,user_id,stack FROM seats WHERE table_id=? ORDER BY seat_index ASC").all(table_id);
   return rows.filter(r=>r.user_id);
 }
-function seatCountPlaying(arr){ return arr.filter(s=> (s.stack>0)).length; }
 function nextOccupiedIndex(order, from){
   const n = order.length;
   if(n===0) return -1;
@@ -140,13 +138,13 @@ function initHand(table){
   g.hole = {};
   g.pot = 0;
   g.allin = new Set();
+  g.street = "preflop"; // <<< VAŽNO: memorijska faza odmah postavljena
 
   // dealer rotacija
   let dealer = (db.prepare("SELECT dealer FROM game_state WHERE table_id=?").get(table.id)?.dealer ?? -1);
   dealer = (dealer+1) % table.seats;
   // odaberi prvog sljedećeg koji je stvarno tu
   if(!order.includes(dealer)){
-    // nađi prvog zauzetog >= dealer
     const sorted = order.slice().sort((a,b)=>a-b);
     dealer = sorted.find(i=>i>=dealer) ?? sorted[0];
   }
@@ -191,10 +189,8 @@ function initHand(table){
 }
 
 function roundAllCalledOrAllIn(g){
-  // runda gotova ako svi koji nisu allin imaju committed == g.bet i niko nema action pending
   for(const i of g.toAct){
     if(g.allin.has(i)) continue;
-    // ako seat više nema žetona (stacks[i]==0) ali committed < bet → svejedno ne može call → tretiramo kao allin
     const need = (g.bet - (g.committed[i]||0));
     if(need>0 && (g.stacks[i]||0)>0) return false;
   }
@@ -203,7 +199,6 @@ function roundAllCalledOrAllIn(g){
 
 function advanceStreet(table, g){
   if(g.street==="preflop"){
-    // flop (3 karte)
     g.board.push(g.deck.pop(), g.deck.pop(), g.deck.pop());
     g.street = "flop";
   } else if(g.street==="flop"){
@@ -221,7 +216,6 @@ function advanceStreet(table, g){
   g.minRaise = table.bb;
   g.committed = {};
   g.toAct = activeOrder(table.id);
-  // prvu akciju određuje prvi aktivni lijevo od dealera (na postflop)
   if(g.street!=="preflop"){
     const afterDealer = nextOccupiedIndex(g.toAct, g.dealer);
     g.toAct = g.toAct.slice(g.toAct.indexOf(afterDealer))
@@ -235,52 +229,43 @@ function advanceStreet(table, g){
 }
 
 function pushPotFromCommitted(g){
-  // zbroji committed svih i dodaj u pot
   const sum = Object.values(g.committed||{}).reduce((a,b)=>a+(b|0),0);
   g.pot += sum;
   g.committed = {};
 }
 
 function seatFold(table_id, seat_index){
-  // ukloni seat iz runde
   const g = GAME[table_id]; if(!g) return;
   g.toAct = g.toAct.filter(i=>i!==seat_index);
   g.yetToAct.delete(seat_index);
-  // sve njegove committed ide u pot
   if(g.committed[seat_index]){ g.pot += g.committed[seat_index]; delete g.committed[seat_index]; }
 }
 
 function everyoneFoldedExceptOne(g){
   const alive = g.toAct.filter(i=>!g.allin.has(i));
-  if(alive.length<=1) return true;
-  return false;
+  return alive.length<=1;
 }
 
 // --- HAND EVALUATOR (7 → 5 best) ---
 function rankToVal(r){ return "23456789TJQKA".indexOf(r); }
 function isStraight(vals){
-  // vals: distinct sorted ascending
   const v = Array.from(new Set(vals)).sort((a,b)=>a-b);
-  // wheel A2345
   const wheel = [0,1,2,3,12];
   let best = -1;
   for(let i=0;i<=v.length-5;i++){
     const slice = v.slice(i,i+5);
     if(slice[4]-slice[0]===4){ best = Math.max(best, slice[4]); }
   }
-  // wheel check
   const hasWheel = wheel.every(x=>v.includes(x));
-  if(hasWheel) best = Math.max(best, 3); // 5-high straight: top = 3 (value of '5')
-  return best; // -1 nema; else high card value
+  if(hasWheel) best = Math.max(best, 3);
+  return best;
 }
 function handScore7(cards7){
-  // cards7: ["Ah","Kd","7c","2d","Jc","Qs","9h"]
-  // map by suits/ranks
   const ranks = cards7.map(c=>rankToVal(c[0])).sort((a,b)=>a-b);
   const suits = cards7.map(c=>c[1]);
   const byRank = {};
   for(const c of cards7){
-    const r = c[0], v=rankToVal(r);
+    const v=rankToVal(c[0]);
     (byRank[v] ||= []).push(c);
   }
   const bySuit = {};
@@ -288,11 +273,8 @@ function handScore7(cards7){
     const s = c[1];
     (bySuit[s] ||= []).push(c);
   }
-  // flush?
   let flushSuit = null;
   for(const s of SUITS){ if((bySuit[s]?.length||0)>=5){ flushSuit=s; break; } }
-
-  // straight / straight flush
   const valsAsc = ranks;
   const straightHigh = isStraight(valsAsc);
   let straightFlushHigh = -1;
@@ -301,55 +283,42 @@ function handScore7(cards7){
     const sfh = isStraight(valsFlush);
     if(sfh>=0) straightFlushHigh = sfh;
   }
-
-  // counts
   const groups = Object.entries(byRank).map(([v,arr])=>({v:parseInt(v,10), n:arr.length})).sort((a,b)=>{
     if(b.n!==a.n) return b.n-a.n;
     return b.v-a.v;
   });
-
-  // score tuple: [category, tiebreakers...], higher better
-  // categories: 8=straight flush, 7=four, 6=full house, 5=flush, 4=straight, 3=three, 2=two pair, 1=pair, 0=high
   if(straightFlushHigh>=0) return [8, straightFlushHigh];
-
   if(groups[0]?.n===4){
     const four=groups[0].v;
     const kick = Math.max(...valsAsc.filter(v=>v!==four));
     return [7, four, kick];
   }
-
   if(groups[0]?.n===3 && groups[1]?.n>=2){
     const trips=groups[0].v;
     const pair=groups[1].v;
     return [6, trips, pair];
   }
-
   if(flushSuit){
     const top = bySuit[flushSuit].map(c=>rankToVal(c[0])).sort((a,b)=>b-a).slice(0,5);
     return [5, ...top];
   }
-
   if(straightHigh>=0) return [4, straightHigh];
-
   if(groups[0]?.n===3){
     const trips=groups[0].v;
     const kicks = valsAsc.filter(v=>v!==trips).sort((a,b)=>b-a).slice(0,2);
     return [3, trips, ...kicks];
   }
-
   if(groups[0]?.n===2 && groups[1]?.n===2){
     const hp = Math.max(groups[0].v, groups[1].v);
     const lp = Math.min(groups[0].v, groups[1].v);
     const kick = Math.max(...valsAsc.filter(v=>v!==hp && v!==lp));
     return [2, hp, lp, kick];
   }
-
   if(groups[0]?.n===2){
     const p = groups[0].v;
     const kicks = valsAsc.filter(v=>v!==p).sort((a,b)=>b-a).slice(0,3);
     return [1, p, ...kicks];
   }
-
   const highs = valsAsc.slice().sort((a,b)=>b-a).slice(0,5);
   return [0, ...highs];
 }
@@ -363,14 +332,10 @@ function compareScore(a,b){
 }
 
 function showdownAndPayout(table, g){
-  // odredi pobjednike; distribucija cijelog pota (bez sidepotova za jednostavnost)
   const order = activeOrder(table.id);
   const contenders = order.filter(i => (g.hole[i] && ((g.stacks[i]||0)>0 || (g.committed[i]||0)>0 || g.allin.has(i)) ) );
   if(contenders.length===0){ g.pot += Object.values(g.committed||{}).reduce((a,b)=>a+(b|0),0); g.committed={}; return; }
-
-  // ubaci preostali committed u pot
   pushPotFromCommitted(g);
-
   const board5 = g.board.slice(0,5);
   const scored = [];
   for(const i of contenders){
@@ -378,24 +343,16 @@ function showdownAndPayout(table, g){
     const score = handScore7(seven);
     scored.push({ i, score });
   }
-  scored.sort((A,B)=>compareScore(A.score,B.score)); // uzlazno
+  scored.sort((A,B)=>compareScore(A.score,B.score));
   const best = scored[scored.length-1].score;
   const winners = scored.filter(x=>compareScore(x.score,best)===0).map(x=>x.i);
-
   const share = Math.floor((g.pot||0)/winners.length);
-  for(const i of winners){
-    g.stacks[i] = (g.stacks[i]||0) + share;
-  }
-  // ostatak kovanica ostavi prvom winneru (da ne ostane visak)
+  for(const i of winners){ g.stacks[i] = (g.stacks[i]||0) + share; }
   const remainder = (g.pot||0) - share*winners.length;
   if(remainder>0) g.stacks[winners[0]] += remainder;
   g.pot = 0;
-
-  // upiši nazad u DB nove stackove
   const upd = db.prepare("UPDATE seats SET stack=? WHERE table_id=? AND seat_index=?");
-  for(const i of Object.keys(g.stacks)){
-    upd.run(g.stacks[i|0], table.id, i|0);
-  }
+  for(const i of Object.keys(g.stacks)){ upd.run(g.stacks[i|0], table.id, i|0); }
 }
 
 // ---------- AUTH ----------
@@ -436,7 +393,7 @@ app.post("/api/me/avatar",(req,res)=>{
   res.json({ ok:true });
 });
 
-// ---------- ADMIN ----------
+// ---------- ADMIN (NE DIRAMO) ----------
 app.get("/api/admin/users",(req,res)=>{
   if(req.headers["x-admin-key"]!==ADMIN_KEY) return res.json({ ok:false,error:"key" });
   const rows=db.prepare("SELECT * FROM users ORDER BY id DESC").all();
@@ -497,9 +454,7 @@ app.post("/api/table/join",(req,res)=>{
   db.prepare("UPDATE users SET balance=balance-? WHERE id=?").run(b,u.id);
   db.prepare("INSERT INTO seats(table_id,seat_index,user_id,stack) VALUES(?,?,?,?)").run(table_id,seat_index,u.id,b);
 
-  // ako se prikupilo 2+ igrača i nema handa → start
   ensureGameRunning(t.id);
-
   broadcastLobby(); broadcastTable(t.id);
   res.json({ ok:true });
 });
@@ -508,7 +463,6 @@ app.post("/api/table/leave",(req,res)=>{
   const { table_id } = req.body||{};
   const s=db.prepare("SELECT * FROM seats WHERE table_id=? AND user_id=?").get(table_id,u.id);
   if(!s) return res.json({ ok:false });
-  // vrati stack
   db.prepare("UPDATE users SET balance=balance+? WHERE id=?").run(s.stack,u.id);
   db.prepare("DELETE FROM seats WHERE table_id=? AND user_id=?").run(table_id,u.id);
   broadcastLobby(); broadcastTable(table_id);
@@ -532,7 +486,7 @@ app.get("/api/table/state",(req,res)=>{
 
   const u=currentUser(req);
   let me_seat=-1, my_hole=["??","??"];
-  const g = GAME[id];
+  const g = GAME[id] || null;
   if(u){
     const ms=db.prepare("SELECT seat_index FROM seats WHERE table_id=? AND user_id=?").get(id,u.id);
     if(ms){ me_seat=ms.seat_index|0; if(g && g.hole && g.hole[me_seat]) my_hole = g.hole[me_seat]; }
@@ -548,17 +502,21 @@ app.get("/api/table/state",(req,res)=>{
     min_bet = call_amt ? (g.bet + g.minRaise) : Math.max(g.minRaise, (g.bet||0));
   }
 
+  const min_buy = t.bb * 50;
+  const max_buy = t.bb * 200;
+
   res.json({
     ok:true,
     table:{ id:t.id, seats:t.seats, sb:t.sb, bb:t.bb },
     street: gs.street, board, pot:gs.pot|0,
     dealer: gs.dealer|0,
     acting: gs.acting|0,
-    sb_i: (gs.dealer>=0? (gs.dealer+1)%t.seats : -1),
-    bb_i: (gs.dealer>=0? (gs.dealer+2)%t.seats : -1),
+    sb_i: g ? g.sb_i : -1,
+    bb_i: g ? g.bb_i : -1,
     seats: seats.map(x=>({ seat_index:x.seat_index, user_id:x.user_id||null, stack:x.stack|0, email:x.email||null, avatar:x.avatar||null })),
     me_seat, my_hole,
-    call_amt, min_bet, min_raise, can_check
+    call_amt, min_bet, min_raise, can_check,
+    min_buy, max_buy
   });
 });
 
@@ -582,9 +540,7 @@ app.post("/api/table/action",(req,res)=>{
   g.stacks[seat] = db.prepare("SELECT stack FROM seats WHERE table_id=? AND seat_index=?").get(table_id,seat).stack|0;
 
   const nextAct = ()=> {
-    // ukloni trenutnog iz yetToAct (odigrao je)
     g.yetToAct.delete(seat);
-    // idući je prvi iz g.toAct koji je != seat i ima pravo igrati
     const idx = g.toAct.indexOf(seat);
     let next = -1;
     for(let k=1;k<=g.toAct.length;k++){
@@ -592,19 +548,17 @@ app.post("/api/table/action",(req,res)=>{
       if(g.allin.has(cand)) continue;
       next = cand; break;
     }
-    if(next===-1) next = seat; // fallback
+    if(next===-1) next = seat;
     db.prepare("UPDATE game_state SET acting=? WHERE table_id=?").run(next, table_id);
   };
 
   // CALL/CHECK/BET/RAISE/FOLD
   if(action==="fold"){
     seatFold(table_id, seat);
-    // ako svi osim jednog — odmah showdown/payout
     if(everyoneFoldedExceptOne(g)){
       pushPotFromCommitted(g);
       g.street="showdown";
       showdownAndPayout(t,g);
-      // reset na waiting (čekaj sljedeći hand)
       db.prepare("UPDATE game_state SET street=?, board=?, pot=?, acting=? WHERE table_id=?")
         .run("waiting","",0,-1,table_id);
       delete GAME[table_id];
@@ -614,20 +568,18 @@ app.post("/api/table/action",(req,res)=>{
     res.json({ ok:true }); broadcastTable(table_id); return;
   }
 
-  // iznosi
   const myComm = g.committed[seat]||0;
   const needCall = Math.max(0, g.bet - myComm);
 
   if(action==="check"){
     if(needCall>0) return res.json({ ok:false,error:"cannot check" });
     nextAct();
-    // ako svi odigrali i runda gotova → sljedeća street ili showdown
     if(roundAllCalledOrAllIn(g)){
       pushPotFromCommitted(g);
       const gs2=db.prepare("SELECT * FROM game_state WHERE table_id=?").get(table_id);
       const board=parseBoard(gs2.board);
-      g.board = board.length? board : g.board; // sigurnost
-      g.street = gs2.street;
+      g.board = board.length? board : g.board;
+      g.street = gs2.street; // sync prije advance
       advanceStreet(t,g);
       if(g.street==="showdown"){
         showdownAndPayout(t,g);
@@ -647,6 +599,9 @@ app.post("/api/table/action",(req,res)=>{
     nextAct();
     if(roundAllCalledOrAllIn(g)){
       pushPotFromCommitted(g);
+      const gs2=db.prepare("SELECT * FROM game_state WHERE table_id=?").get(table_id);
+      g.board = parseBoard(gs2.board);
+      g.street = gs2.street; // <<< DODANO: osiguraj tačan street
       advanceStreet(t,g);
       if(g.street==="showdown"){
         showdownAndPayout(t,g);
@@ -659,26 +614,32 @@ app.post("/api/table/action",(req,res)=>{
   }
 
   if(action==="bet" || action==="raise"){
-    const amt = Math.max(0, amount|0);
-    const minRaise = Math.max(g.minRaise, t.bb);
-    const targetBet = Math.max(g.bet, (action==="bet" ? t.bb : g.bet + minRaise));
+    const reqAmt = Math.max(0, amount|0);
+    const currentBet = g.bet|0;
+    const baseMinRaise = Math.max(g.minRaise|0, t.bb|0);
 
-    // koliko trebam ukupno committed da dostignem targetBet
-    let toPut = targetBet - myComm;
-    if(toPut < t.bb) toPut = t.bb; // najmanje BB kao bet
+    let targetBet;
+    if(action==="bet"){
+      if(reqAmt < t.bb) return res.json({ ok:false, error:`min bet ${t.bb}` });
+      targetBet = reqAmt;                 // bet je direktno ciljani bet
+      g.minRaise = Math.max(baseMinRaise, t.bb);
+    }else{ // raise
+      const raiseSize = Math.max(reqAmt, baseMinRaise);
+      targetBet = currentBet + raiseSize;
+      g.minRaise = raiseSize;             // minRaise = veličina zadnjeg raise-a
+    }
 
-    // all-in dopušten
-    toPut = Math.min(toPut, g.stacks[seat]||0);
-    if(toPut<=0) return res.json({ ok:false,error:"no chips" });
+    const toPutRaw = Math.max(0, targetBet - myComm);
+    let toPut = Math.min(toPutRaw, g.stacks[seat]||0); // all-in dozvoljen
+    if(toPut<=0) return res.json({ ok:false, error:"no chips" });
 
     g.stacks[seat]-=toPut;
     g.committed[seat]=(g.committed[seat]||0)+toPut;
     if(g.stacks[seat]===0) g.allin.add(seat);
 
-    g.bet = Math.max(g.bet, g.committed[seat]||0);
-    g.minRaise = Math.max(minRaise, t.bb);
+    g.bet = Math.max(g.bet|0, g.committed[seat]|0);
 
-    // svi ostali opet dobivaju pravo (jer je bio raise)
+    // svi ostali opet imaju pravo igrati (osim all-in)
     g.yetToAct = new Set(g.toAct.filter(i=>i!==seat && !g.allin.has(i)));
 
     nextAct();
@@ -686,6 +647,39 @@ app.post("/api/table/action",(req,res)=>{
   }
 
   return res.json({ ok:false,error:"unknown action" });
+});
+
+// TOP-UP (Dodaj čipove) — cap 200×BB total stack
+app.post("/api/table/topup",(req,res)=>{
+  const u = requireUser(req,res); if(!u) return;
+  const { table_id, amount } = req.body||{};
+  const t = db.prepare("SELECT * FROM tables WHERE id=?").get(table_id);
+  if(!t) return res.json({ ok:false, error:"missing" });
+
+  const s = db.prepare("SELECT * FROM seats WHERE table_id=? AND user_id=?").get(table_id,u.id);
+  if(!s) return res.json({ ok:false, error:"not seated" });
+
+  const want = Math.max(0, amount|0);
+  if(want<=0) return res.json({ ok:false, error:"bad amount" });
+
+  const cap = t.bb * 200;             // max total stack
+  const current = s.stack|0;
+  if(current >= cap) return res.json({ ok:false, error:"at cap" });
+
+  const allowed = Math.max(0, cap - current);
+  const add = Math.min(want, allowed);
+  if(add<=0) return res.json({ ok:false, error:"bad amount" });
+
+  // provjeri balance
+  const freshU = db.prepare("SELECT balance FROM users WHERE id=?").get(u.id);
+  if(!freshU || (freshU.balance|0) < add) return res.json({ ok:false, error:"no chips" });
+
+  // skidanje s user balansa i dodavanje na stack
+  db.prepare("UPDATE users SET balance=balance-? WHERE id=?").run(add, u.id);
+  db.prepare("UPDATE seats SET stack=stack+? WHERE table_id=? AND user_id=?").run(add, table_id, u.id);
+
+  broadcastTable(table_id);
+  res.json({ ok:true });
 });
 
 // Auto start hand kad je stol spreman
@@ -696,11 +690,9 @@ function ensureGameRunning(table_id){
   const players = liveSeats(table_id);
   if(players.length<2) return;
 
-  // ako waiting → start
   if(!gs || gs.street==="waiting"){
     const g = initHand(t);
     if(!g) return;
-    // upiši acting u GS
     db.prepare("UPDATE game_state SET pot=?, acting=? WHERE table_id=?")
       .run(g.pot|0, g.toAct[0] ?? -1, table_id);
   }
