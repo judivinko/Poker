@@ -92,7 +92,8 @@ function parseBoard(s){ return s? s.split(",").filter(Boolean):[]; }
 function boardStr(a){ return (a&&a.length)? a.join(",") : ""; }
 // ===== TREĆI DIO =====
 // --- In-memory game runtime (po stolu) ---
-/* Struktura:
+
+
 GAME[table_id] = {
   deck: [...], board:[...],
   hole: { seatIndex: [c1,c2], ... },
@@ -181,7 +182,7 @@ function initHand(table){
 
   // acting red preflop: next nakon BB
   const afterBB = order[(order.indexOf(g.bb_i)+1)%order.length];
-  g.toAct = order.slice(order.indexOf(afterBB)).concat(order.slice(0,order.indexOf(afterBB)]);
+  g.toAct = order.slice(order.indexOf(afterBB)).concat(order.slice(0, order.indexOf(afterBB)));
   g.yetToAct = new Set(g.toAct);
 
   // persist osnovnog GS
