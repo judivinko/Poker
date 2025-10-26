@@ -51,56 +51,68 @@ CREATE TABLE IF NOT EXISTS game_state (
   acting INTEGER       -- seat na potezu (-1 ako niko)
 );
 `);
-// ===== DRUGI DIO =====
-const app = express();
 
-// VAŽNO: Render / Railway / Heroku rade iza proxyja → bez ovoga Secure cookie NE RADI NA MOBITELIMA
-app.set('trust proxy', 1);
 
-app.use(express.json());
-app.use(cookieParser());
-app.use(express.static("public"));
-
-// --- Aliasi za nazive slika (radi razmaka u card_ bach.png) ---
-app.get("/card_back.png",(req,res)=>{
-  const p = path.join(__dirname,"public","card_ bach.png");
-  if(fs.existsSync(p)) return res.sendFile(p);
-  return res.sendFile(path.join(__dirname,"public","card_back.png"));
-});
-app.get("/app.css",(req,res)=>{
-  const p = path.join(__dirname,"public","css.app");
-  if(fs.existsSync(p)) return res.sendFile(p);
-  return res.sendFile(path.join(__dirname,"public","app.css"));
+// ===== PETI DIO =====
+// ---------- AUTH ----------
+app.post("/api/register",(req,res)=>{
+  const { email,password } = req.body||{};
+  if(!email || !password || password.length<6) return res.json({ ok:false,error:"missing" });
+  try{
+    const hash=bcrypt.hashSync(password,10);
+    db.prepare("INSERT INTO users(email,pass) VALUES(?,?)").run(email.toLowerCase(),hash);
+    res.json({ ok:true });
+  }catch{ res.json({ ok:false,error:"exists" }); }
 });
 
-// ---------- HELPERS ----------
-function currentUser(req){
-  if(!req.cookies.uid) return null;
-  return db.prepare("SELECT * FROM users WHERE id=?").get(req.cookies.uid);
-}
+app.post("/api/login",(req,res)=>{
+  const { email,password } = req.body||{};
+  const u=db.prepare("SELECT * FROM users WHERE email=?").get((email||"").toLowerCase());
+  if(!u) return res.json({ ok:false,error:"bad" });
+  if(!bcrypt.compareSync(password||"",u.pass)) return res.json({ ok:false,error:"bad" });
+  if(u.disabled) return res.json({ ok:false,error:"banned" });
 
-function requireUser(req,res){
-  const u = currentUser(req);
-  if(!u){ res.json({ ok:false, error:"login" }); return null; }
-  if(u.disabled){ res.json({ ok:false, error:"banned" }); return null; }
-  return u;
-}
+  // ✅ SIGURAN COOKIE — Secure ovisno o stvarnom protokolu zahtjeva
+  res.cookie("uid", String(u.id), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isReqSecure(req),   // ključno: ne hardcodati true, već provjeriti req
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
 
-const SUITS = ["c","d","h","s"];
-const RANKS = ["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+  res.json({ ok:true });
+});
 
-function newDeck(){
-  const d=[];
-  for(const r of RANKS) for(const s of SUITS) d.push(r+s);
-  for(let i=d.length-1;i>0;i--){
-    const j=(Math.random()*(i+1))|0;
-    [d[i],d[j]]=[d[j],d[i]];
-  }
-  return d;
-}
+app.get("/api/logout",(req,res)=>{
+  // ✅ Briši cookie s istim atributima kao na loginu
+  res.clearCookie("uid", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isReqSecure(req),
+    path: "/"
+  });
+  res.json({ ok:true });
+});
 
-function parseBoard(s){ return s? s.split(",").filter(Boolean):[]; }
-function boardStr(a){ return (a&&a.length)? a.join(",") : ""; }
+app.get("/api/me",(req,res)=>{
+  const u=currentUser(req);
+  if(!u) return res.status(401).json({ ok:false }); // 401 kad nema sesije
+  res.json({ ok:true, user:{ id:u.id, email:u.email, balance:u.balance, avatar:u.avatar }});
+});
+
+// Avatari
+app.get("/api/avatars",(req,res)=>{
+  const list = fs.readdirSync(path.join(__dirname,"public")).filter(f=>/^avatar_\d+\.png$/i.test(f));
+  res.json({ ok:true, avatars:list.map(x=>"/"+x) });
+});
+app.post("/api/me/avatar",(req,res)=>{
+  const u=requireUser(req,res); if(!u) return;
+  const { avatar } = req.body||{};
+  if(!avatar) return res.json({ ok:false,error:"missing" });
+  db.prepare("UPDATE users SET avatar=? WHERE id=?").run(avatar,u.id);
+  res.json({ ok:true });
+});
 
 
 // ===== TREĆI DIO =====
@@ -444,7 +456,6 @@ function showdownAndPayout(table, g){
  
 // ===== PETI DIO =====
 // ---------- AUTH ----------
-
 app.post("/api/register",(req,res)=>{
   const { email,password } = req.body||{};
   if(!email || !password || password.length<6) return res.json({ ok:false,error:"missing" });
@@ -464,24 +475,24 @@ app.post("/api/login",(req,res)=>{
   if(!bcrypt.compareSync(password||"",u.pass)) return res.json({ ok:false,error:"bad" });
   if(u.disabled) return res.json({ ok:false,error:"banned" });
 
-  // ✅ SIGURAN COOKIE — radi na PC + mobitelima (HTTPS obavezno)
+  // SIGURAN COOKIE — Secure ovisno o stvarnom protokolu zahtjeva (HTTP/HTTPS iza proxyja)
   res.cookie("uid", String(u.id), {
     httpOnly: true,
-    secure: true,
     sameSite: "lax",
+    secure: isReqSecure(req),   // <— ključno
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dana
+    maxAge: 7 * 24 * 60 * 60 * 1000
   });
 
   res.json({ ok:true });
 });
 
 app.get("/api/logout",(req,res)=>{
-  // ✅ Očisti cookie sa ISTIM atributima
+  // Briši cookie s ISTIM atributima kao pri postavljanju
   res.clearCookie("uid", {
     httpOnly: true,
-    secure: true,
     sameSite: "lax",
+    secure: isReqSecure(req),
     path: "/"
   });
   res.json({ ok:true });
@@ -489,7 +500,7 @@ app.get("/api/logout",(req,res)=>{
 
 app.get("/api/me",(req,res)=>{
   const u=currentUser(req);
-  if(!u) return res.json({ ok:false });
+  if(!u) return res.status(401).json({ ok:false }); // 401 kad nema sesije
   res.json({ ok:true, user:{ id:u.id, email:u.email, balance:u.balance, avatar:u.avatar }});
 });
 
@@ -506,6 +517,7 @@ app.post("/api/me/avatar",(req,res)=>{
   db.prepare("UPDATE users SET avatar=? WHERE id=?").run(avatar,u.id);
   res.json({ ok:true });
 });
+
 
 
 // ===== ŠESTI DIO =====
