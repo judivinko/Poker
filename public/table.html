@@ -6,36 +6,33 @@
 <title>Poker Table</title>
 <link rel="stylesheet" href="/game.css">
 <style>
-body{ margin:0; background:#0b0d13; color:#fff; font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; }
-.hidden{ display:none !important; }
-.wrap{ position:relative; width:100vw; height:100vh; overflow:hidden; display:flex; align-items:center; justify-content:center; }
-#table{ position:relative; width:min(100vw,100vh); height:min(100vw,100vh); background:url('/poker_table.png') center/contain no-repeat; }
-.seat{ position:absolute; text-align:center; width:90px; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; }
-.seat .avatar{ width:48px; height:48px; border-radius:50%; border:2px solid #233047; object-fit:cover; margin-bottom:4px; }
-.seat .nick{ font-size:13px; }
-.seat .stack{ font-size:12px; opacity:.85; }
-.badges{ display:flex; gap:4px; margin-top:2px; }
-.badge{ font-size:11px; background:#22d3ee; color:#000; padding:1px 4px; border-radius:4px; }
-#board{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); display:flex; gap:8px; }
-.card{ width:55px; height:80px; background-size:cover; border-radius:6px; }
-#pot{ position:absolute; top:50%; left:50%; transform:translate(-50%,-120%); font-size:16px; opacity:.9; }
-#status{ position:absolute; bottom:8%; left:50%; transform:translateX(-50%); opacity:.8; font-size:16px; }
-#actions{ position:absolute; bottom:5%; left:50%; transform:translateX(-50%); display:flex; gap:10px; }
-#actions button{ padding:8px 16px; font-size:14px; font-weight:700; border-radius:6px; border:none; cursor:pointer; background:#22d3ee; color:#000; }
-#bet-box{ position:absolute; bottom:18%; left:50%; transform:translateX(-50%); display:flex; gap:6px; }
-#bet-box input{ width:80px; padding:6px; border-radius:6px; background:#111722; border:1px solid #233047; color:#fff; text-align:center; }
+.hidden{display:none!important}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+.modal{width:min(92vw,380px);background:#0f1624;border:1px solid #233047;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.modal .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.modal input,.modal select{background:#0b1220;border:1px solid #233047;border-radius:10px;padding:10px;color:#e5e7eb}
+.modal button{background:#22d3ee;color:#000;border:none;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer}
+.modal button.secondary{background:#2b3445;color:#e5e7eb}
+#topbar{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:40;display:flex;gap:8px}
+#topbar .pill{background:#0f1624;border:1px solid #233047;border-radius:999px;padding:6px 12px}
 </style>
 </head>
 <body>
 
+<div id="topbar" class="hidden">
+  <div id="info-pill" class="pill">—</div>
+  <button id="btn-open-join" class="pill hidden">Join</button>
+  <button id="btn-open-topup" class="pill hidden">Dodaj čipove</button>
+  <button id="btn-leave" class="pill hidden">Napusti</button>
+</div>
+
 <div class="wrap">
   <div id="table">
-
     <div id="pot">—</div>
     <div id="board"></div>
     <div id="status">Učitavanje…</div>
 
-    <!-- Sjedišta (maks 9, pozicije će namjestiti table.js) -->
+    <!-- 9 seats -->
     <div class="seat" data-i="0"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
     <div class="seat" data-i="1"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
     <div class="seat" data-i="2"><img class="avatar" src="/seat_empty.png"><div class="nick"></div><div class="stack"></div><div class="badges"></div></div>
@@ -48,18 +45,48 @@ body{ margin:0; background:#0b0d13; color:#fff; font-family:system-ui,Segoe UI,R
 
     <!-- BET INPUT -->
     <div id="bet-box" class="hidden">
-      <input id="bet-amount" type="number" value="0">
-      <button onclick="sendBet()">Bet</button>
+      <input id="bet-amount" type="number" value="0" min="0" step="1">
+      <button id="btn-send-bet">Bet</button>
     </div>
 
     <!-- ACTION BUTTONS -->
     <div id="actions" class="hidden">
-      <button onclick="sendFold()">Fold</button>
-      <button onclick="sendCheck()">Check</button>
-      <button onclick="sendCall()">Call</button>
-      <button onclick="openBet()">Bet/Raise</button>
+      <button id="btn-fold">Fold</button>
+      <button id="btn-check">Check</button>
+      <button id="btn-call">Call</button>
+      <button id="btn-open-bet">Bet/Raise</button>
     </div>
+  </div>
+</div>
 
+<!-- JOIN MODAL -->
+<div id="join-box" class="modal-backdrop">
+  <div class="modal">
+    <div style="font-weight:800;color:#94a3b8">Join Sto #<span id="join-id"></span></div>
+    <label>Sjedalo</label>
+    <select id="join-seat"></select>
+    <label>Buy-in (min–max)</label>
+    <input id="join-buy" type="number" value="0" min="0" step="1">
+    <div id="join-range" style="color:#94a3b8"></div>
+    <div class="row">
+      <button id="btn-join-confirm">Join</button>
+      <button class="secondary" id="btn-close-join">Zatvori</button>
+    </div>
+    <div id="join-msg" style="color:#94a3b8"></div>
+  </div>
+</div>
+
+<!-- TOP-UP MODAL -->
+<div id="topup-box" class="modal-backdrop">
+  <div class="modal">
+    <div style="font-weight:800;color:#94a3b8">Dodaj čipove</div>
+    <div id="topup-hint" style="color:#94a3b8">—</div>
+    <input id="topup-amount" type="number" value="0" min="1" step="1">
+    <div class="row">
+      <button id="btn-topup-confirm">Dodaj</button>
+      <button class="secondary" id="btn-close-topup">Zatvori</button>
+    </div>
+    <div id="topup-msg" style="color:#94a3b8"></div>
   </div>
 </div>
 
