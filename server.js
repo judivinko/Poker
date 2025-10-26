@@ -730,4 +730,13 @@ wss.on("connection",(ws)=>{
   });
 });
 
-server.listen(PORT,()=>console.log("✅ Poker server running on",PORT));
+// --- Health check (Render) ---
+app.get("/healthz", (req, res) => {
+  res.status(200).send("ok");
+});
+
+// --- Start server (render-compatible, dostupno sa svih uređaja) ---
+server.listen(PORT, '0.0.0.0', () => {
+  console.log("✅ Poker server running on", PORT);
+});
+
