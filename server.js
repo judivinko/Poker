@@ -1,5 +1,7 @@
 // TEXAS HOLD'EM CASH GAME — FULL SERVER (AUTH + ADMIN + LOBBY + ENGINE)
 // =====================================================================
+// TEXAS HOLD'EM CASH GAME — FULL SERVER (AUTH + ADMIN + LOBBY + ENGINE)
+// =====================================================================
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
@@ -9,7 +11,9 @@ const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
 const Database = require("better-sqlite3");
 
-const PORT = process.env.PORT || 3000;
+// --- CONFIG (Render-friendly) ---
+const PORT = parseInt(process.env.PORT || "3000", 10);
+const HOST = process.env.HOST || "0.0.0.0";
 const ADMIN_KEY = process.env.ADMIN_KEY || "admin123";
 
 // --- DB ---
@@ -731,12 +735,10 @@ wss.on("connection",(ws)=>{
 });
 
 // --- Health check (Render) ---
-app.get("/healthz", (req, res) => {
-  res.status(200).send("ok");
-});
+app.get("/healthz", (_req, res) => res.status(200).send("ok"));
+app.get("/health",  (_req, res) => res.json({ ok:true, ts: Date.now() }));
 
 // --- Start server (render-compatible, dostupno sa svih uređaja) ---
-server.listen(PORT, '0.0.0.0', () => {
-  console.log("✅ Poker server running on", PORT);
+server.listen(PORT, HOST, () => {
+  console.log(`✅ Poker server running at http://${HOST}:${PORT}`);
 });
-
