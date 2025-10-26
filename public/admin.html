@@ -1,126 +1,209 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Poker Admin</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Poker • Admin</title>
 <link rel="stylesheet" href="/app.css">
 <style>
-body { background:#0b0d13; color:#e5e7eb; font-family:system-ui,sans-serif; }
-.wrap { max-width:600px; margin:0 auto; padding:20px; }
-h1 { text-align:center; margin-bottom:20px; }
-.row { display:flex; gap:6px; margin-top:10px; }
-.btn { padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600; background:#22d3ee; color:#000; }
-.btn.red { background:#b91c1c; color:#fff; }
-.btn.gray { background:#374151; color:#eee; }
-input { padding:6px; border-radius:6px; background:#111722; border:1px solid #334155; color:#e5e7eb; flex:1; }
-.user-list { margin-top:20px; display:flex; flex-direction:column; gap:8px; }
-.user-item { background:#111722; padding:8px; border-radius:8px; border:1px solid #1f2937; display:flex; justify-content:space-between; align-items:center; }
-.muted { opacity:.65; }
+  :root{ --bg:#0b0d13; --panel:#111722; --muted:#94a3b8; --br:#243041; --btn:#22d3ee; }
+  body{ margin:0; background:var(--bg); color:#e5e7eb; font:14px/1.4 system-ui,Segoe UI,Roboto,Arial,sans-serif; }
+  .wrap{ max-width:900px; margin:0 auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
+  .card{ background:var(--panel); border:1px solid var(--br); border-radius:12px; padding:14px; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .col{ display:flex; flex-direction:column; gap:8px; }
+  input{ background:#0b1220; border:1px solid var(--br); border-radius:8px; padding:10px; color:#e5e7eb; }
+  button{ background:var(--btn); color:#000; border:none; border-radius:8px; padding:10px 14px; font-weight:800; cursor:pointer; }
+  button.secondary{ background:#2b3445; color:#e5e7eb; }
+  button.red{ background:#b91c1c; color:#fff; }
+  .muted{ color:var(--muted); }
+  .list{ display:flex; flex-direction:column; gap:8px; }
+  .item{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid var(--br); border-radius:10px; background:#0f1624; }
+  .left{ display:flex; align-items:center; gap:10px; }
+  .avatar{ width:36px; height:36px; border-radius:999px; object-fit:cover; border:1px solid #233047; background:#0b1220; }
+  .pill{ padding:2px 8px; border-radius:999px; font-weight:800; background:#0b1220; border:1px solid var(--br); }
+  .toolbar{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
+  .grow{ flex:1 }
 </style>
 </head>
 <body>
 
 <div class="wrap">
-  <h1>ADMIN PANEL</h1>
 
-  <div class="row">
-    <input type="password" id="adminkey" placeholder="x-admin-key">
-    <button class="btn" onclick="setKey()">Set</button>
-  </div>
+  <h1 style="text-align:center;margin:6px 0 4px;">ADMIN PANEL</h1>
 
-  <div class="row">
-    <input type="text" id="email" placeholder="email korisnika">
-  </div>
+  <!-- AUTH -->
+  <section class="card">
+    <div class="row">
+      <input id="adminkey" class="grow" type="password" placeholder="x-admin-key">
+      <button id="btn-set">Set</button>
+      <span id="msg" class="muted"></span>
+    </div>
+  </section>
 
-  <div class="row">
-    <input type="number" id="chips" placeholder="čipovi (+ dodaj, - oduzmi)">
-    <button class="btn" onclick="give()">Primijeni</button>
-  </div>
+  <!-- TOOLS -->
+  <section class="card">
+    <div class="toolbar">
+      <div class="row grow">
+        <input id="filter" class="grow" type="text" placeholder="Traži po emailu…">
+        <button class="secondary" id="btn-reload">Osvježi</button>
+      </div>
+      <div class="row">
+        <span class="muted">Sort:</span>
+        <button class="secondary" id="sort-email">Email</button>
+        <button class="secondary" id="sort-balance">Balance</button>
+        <button class="secondary" id="sort-id">ID</button>
+      </div>
+    </div>
+  </section>
 
-  <div class="row">
-    <button class="btn gray" onclick="disable(1)">DISABLE</button>
-    <button class="btn" onclick="disable(0)">ENABLE</button>
-  </div>
+  <!-- MASS ACTIONS -->
+  <section class="card">
+    <div class="row">
+      <input id="email" class="grow" type="email" placeholder="email korisnika">
+      <input id="amount" type="number" placeholder="čipovi (+ dodaj, - oduzmi)">
+      <button id="btn-apply">Primijeni</button>
+      <button id="btn-disable" class="red">DISABLE</button>
+      <button id="btn-enable">ENABLE</button>
+    </div>
+    <div id="op-msg" class="muted" style="margin-top:6px;"></div>
+  </section>
 
-  <div id="msg" style="margin-top:10px;color:#22d3ee;"></div>
+  <!-- USERS -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between;">
+      <div class="muted">Korisnici</div>
+      <div class="pill" id="count">0</div>
+    </div>
+    <div id="users" class="list" style="margin-top:10px;">—</div>
+  </section>
 
-  <h2 style="margin-top:30px;text-align:center;">Korisnici</h2>
-  <div id="users" class="user-list">Loading...</div>
 </div>
 
 <script>
-let KEY = "";
+(function(){
+  const $ = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
 
-function setKey(){
-  KEY = document.getElementById("adminkey").value.trim();
-  loadUsers();
-}
+  let KEY = "";
+  let USERS = [];
+  let SORT = "id"; // id | email | balance
+  let ASC = false;
 
-async function give(){
-  const email = document.getElementById("email").value.trim();
-  const amount = parseInt(document.getElementById("chips").value||"0",10);
-  if(!email || !amount) return msg("Unesi email i iznos.");
+  function setMsg(t){ $("#msg").textContent = t||""; }
+  function setOp(t){ $("#op-msg").textContent = t||""; }
 
-  const r = await fetch("/api/admin/chips",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json", "x-admin-key":KEY },
-    body:JSON.stringify({email,amount})
-  }).then(r=>r.json());
+  function fmtUser(u){
+    return `
+      <div class="left">
+        <img class="avatar" src="${u.avatar||'/avatar_1.png'}" alt="">
+        <div>
+          <div style="font-weight:800">${u.email}${u.disabled? ' <span class="pill" style="margin-left:6px;border-color:#b91c1c;color:#fca5a5">DISABLED</span>':''}</div>
+          <div class="muted">ID: ${u.id}</div>
+        </div>
+      </div>
+      <div class="left">
+        <div class="pill">${u.balance|0} čipova</div>
+        <button class="secondary" data-mail="${u.email}">Select</button>
+      </div>
+    `;
+  }
 
-  if(r.ok){ msg("Uspješno."); loadUsers(); }
-  else msg("Greška: "+(r.error||""));
-}
+  function render(){
+    let list = USERS.slice();
 
-async function disable(flag){
-  const email = document.getElementById("email").value.trim();
-  if(!email) return msg("Unesi email.");
+    const q = $("#filter").value.trim().toLowerCase();
+    if (q) list = list.filter(u => (u.email||"").toLowerCase().includes(q));
 
-  const r = await fetch("/api/admin/disable",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json", "x-admin-key":KEY },
-    body:JSON.stringify({email,flag})
-  }).then(r=>r.json());
+    list.sort((a,b)=>{
+      if (SORT==="email"){
+        const A=(a.email||"").toLowerCase(), B=(b.email||"").toLowerCase();
+        return ASC ? A.localeCompare(B) : B.localeCompare(A);
+      }
+      if (SORT==="balance"){
+        return ASC ? (a.balance|0)-(b.balance|0) : (b.balance|0)-(a.balance|0);
+      }
+      // id
+      return ASC ? (a.id|0)-(b.id|0) : (b.id|0)-(a.id|0);
+    });
 
-  if(r.ok){ msg(flag? "Korisnik DISABLED":"Korisnik ENABLED"); loadUsers(); }
-  else msg("Greška.");
-}
+    const box = $("#users");
+    if (!list.length){ box.textContent = "Nema korisnika."; $("#count").textContent = "0"; return; }
+    box.innerHTML = "";
+    for (const u of list){
+      const item = document.createElement("div");
+      item.className = "item";
+      item.innerHTML = fmtUser(u);
+      item.querySelector("button.secondary").onclick = ()=>{
+        $("#email").value = u.email;
+        setOp("Korisnik odabran.");
+      };
+      box.appendChild(item);
+    }
+    $("#count").textContent = String(list.length);
+  }
 
-function msg(t){ document.getElementById("msg").textContent=t; }
+  async function loadUsers(){
+    if (!KEY){ setMsg("Unesi admin ključ."); return; }
+    setMsg("Učitavanje…");
+    try{
+      const r = await fetch("/api/admin/users",{ headers:{ "x-admin-key": KEY }});
+      if (!r.ok){ setMsg("Greška (HTTP)."); return; }
+      const j = await r.json();
+      if (!j.ok){ setMsg(j.error||"Greška"); return; }
+      USERS = j.users || [];
+      setMsg("OK");
+      render();
+    }catch(e){
+      setMsg("Greška konekcije.");
+    }
+  }
 
-async function loadUsers(){
-  const r = await fetch("/api/tables"); // samo da provjerimo server
-  const all = await fetch("/api/tables").catch(()=>null);
+  async function post(path, body){
+    const r = await fetch(path,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "x-admin-key": KEY },
+      body: JSON.stringify(body||{})
+    }).then(r=>r.json()).catch(()=>null);
+    return r;
+  }
 
-  // ali korisnike vadimo iz baze preko stola:
-  // zato radimo trik -> izvući sve seat korisnike
-  // jednostavnije: napravimo listu unutar servera kasnije.
-  // Za sada listamo sve korisnike:
-  const users = await fetch("/data", {method:"POST"}).catch(()=>null);
+  // Events
+  $("#btn-set").onclick = ()=>{ KEY = $("#adminkey").value.trim(); setMsg(KEY? "Admin ključ postavljen.":""); if(KEY) loadUsers(); };
+  $("#btn-reload").onclick = loadUsers;
+  $("#filter").oninput = render;
 
-  // Pošto nemamo api/listUsers endpoint — pravimo ga sada:
-  const u = await fetch("/api/debug/users").catch(()=>null);
-}
+  $("#sort-email").onclick = ()=>{ SORT="email"; ASC=!ASC; render(); };
+  $("#sort-balance").onclick = ()=>{ SORT="balance"; ASC=!ASC; render(); };
+  $("#sort-id").onclick = ()=>{ SORT="id"; ASC=!ASC; render(); };
 
-// Pošto trebamo listu korisnika → odmah dodajemo mali endpoint:
-fetch("/api/debug/users").then(async r=>{
-  if(!r.ok) return document.getElementById("users").innerHTML="Nema endpoint /api/debug/users — reci 'daj listUsers' i napravim odmah.";
-  const data = await r.json();
-  if(!data.ok) return;
-  renderUsers(data.users);
-});
+  $("#btn-apply").onclick = async ()=>{
+    const email = $("#email").value.trim();
+    const amount = parseInt($("#amount").value||"0",10);
+    if(!email || !amount){ setOp("Unesi email i iznos."); return; }
+    const r = await post("/api/admin/chips",{ email, amount });
+    if (r?.ok){ setOp("Uspješno."); await loadUsers(); }
+    else setOp("Greška: "+(r?.error||""));
+  };
 
-function renderUsers(list){
-  const box = document.getElementById("users");
-  box.innerHTML="";
-  list.forEach(u=>{
-    const div=document.createElement("div");
-    div.className="user-item";
-    div.innerHTML=`<div>${u.email}</div><div class="muted">${u.balance} čipova</div>`;
-    div.onclick=()=>{ document.getElementById("email").value=u.email; };
-    box.appendChild(div);
-  });
-}
+  $("#btn-disable").onclick = async ()=>{
+    const email = $("#email").value.trim();
+    if(!email){ setOp("Unesi email."); return; }
+    const r = await post("/api/admin/disable",{ email, flag:1 });
+    if (r?.ok){ setOp("Korisnik DISABLED."); await loadUsers(); }
+    else setOp("Greška.");
+  };
+  $("#btn-enable").onclick = async ()=>{
+    const email = $("#email").value.trim();
+    if(!email){ setOp("Unesi email."); return; }
+    const r = await post("/api/admin/disable",{ email, flag:0 });
+    if (r?.ok){ setOp("Korisnik ENABLED."); await loadUsers(); }
+    else setOp("Greška.");
+  };
+
+  // Boot
+  $("#adminkey").focus();
+})();
 </script>
 
 </body>
