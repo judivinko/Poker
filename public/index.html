@@ -129,7 +129,7 @@ h1{ text-align:center; margin:6px 0 10px; }
 
   
   
-  <!-- ===== DIO 2/2 (SCRIPT) ===== -->
+ <!-- ===== DIO 2/2 (SCRIPT) ===== -->
 <script>
 const $=s=>document.querySelector(s);
 let ME=null;
@@ -153,17 +153,30 @@ async function me(){
 $("#btn-login").onclick=async()=>{
   const email=$("#login-email").value.trim();
   const pass=$("#login-pass").value;
-  const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password:pass})}).then(r=>r.json());
+  const r=await fetch("/api/login",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    credentials:"include",
+    body:JSON.stringify({email,password:pass})
+  }).then(r=>r.json());
   $("#auth-msg").textContent=r.ok?"Ulogiran.":(r.error||"Greška");
   await me(); await loadTables();
 };
 $("#btn-register").onclick=async()=>{
   const email=$("#reg-email").value.trim();
   const pass=$("#reg-pass").value;
-  const r=await fetch("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password:pass})}).then(r=>r.json());
+  const r=await fetch("/api/register",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    credentials:"include",
+    body:JSON.stringify({email,password:pass})
+  }).then(r=>r.json());
   $("#auth-msg").textContent=r.ok?"Račun kreiran. Logiraj se.":(r.error||"Greška");
 };
-$("#btn-logout").onclick=async()=>{ await fetch("/api/logout"); await me(); await loadTables(); };
+$("#btn-logout").onclick=async()=>{
+  await fetch("/api/logout",{credentials:"include"});
+  await me(); await loadTables();
+};
 
 async function loadTables(){
   const r=await fetch("/api/tables").then(r=>r.json()).catch(()=>null);
