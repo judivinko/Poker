@@ -1,13 +1,14 @@
 <!doctype html>
-<html lang="hr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Poker • Lobby & Stol</title>
+  <title>Poker • Lobby & Table</title>
   <link rel="stylesheet" href="/game.css" />
   <style>
-    /* Minimalna pomoć, ostatak dolazi iz /game.css  */
+    /* Minimal helpers – main look lives in /game.css */
     .hidden{display:none!important}
+    .disabled{opacity:.5;pointer-events:none}
     .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:300}
     .modal{background:#0f1624;border:1px solid #233047;border-radius:14px;padding:16px;min-width:320px;max-width:420px;box-shadow:0 20px 50px rgba(0,0,0,.55)}
     .row{display:flex;gap:10px;align-items:center}
@@ -17,34 +18,34 @@
     .btn.primary{background:linear-gradient(#23d3ee,#16b8d6);color:#001015;border:0}
     .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0f1624;border:1px solid #233047;border-radius:999px;padding:10px 16px;font-weight:800;z-index:400}
     .tabbtn.active{filter:brightness(1.12)}
-    /* Inline buy-in mjehurić kod slobodnog mjesta */
+    /* Inline buy-in bubble above free seat */
     .buyin-pop{position:absolute;left:50%;top:-8px;transform:translate(-50%,-100%);background:#0f1624;border:1px solid #233047;border-radius:12px;padding:10px;display:flex;gap:8px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+    /* Player (seat 8) enhancements */
     .seat.me .controls{position:absolute;left:calc(var(--avatar) + 110px);top:50%;transform:translateY(-50%);display:flex;gap:8px;align-items:center}
     .seat.me .cards{position:absolute;left:56px;top:50%;transform:translateY(-50%);display:flex;gap:8px}
-    .disabled{opacity:.5;pointer-events:none}
   </style>
 </head>
 <body>
 
 <!-- ================= TOPBAR ================= -->
 <div id="topbar">
-  <!-- Lijevo: avatar + nick + chip (samo kad je logiran) -->
+  <!-- Left: avatar + nick + balance (only when logged) -->
   <div class="top-left hidden" id="top-left">
     <img class="avatar" id="avatar" src="/avatar_1.png" alt="avatar" />
     <div class="nick" id="nick">Player</div>
-    <div class="balance" id="balance">0</div>
+    <div class="balance" id="balance" title="Chips (KM)">0</div>
   </div>
 
-  <!-- Sredina: Mali / Veliki sto (samo kad je logiran) -->
+  <!-- Center: Small / Big table (only when logged) -->
   <div class="top-center hidden" id="top-center">
-    <button class="tabbtn" id="btn-small">Mali sto</button>
-    <button class="tabbtn secondary" id="btn-big">Veliki sto</button>
+    <button class="tabbtn" id="btn-small" aria-pressed="true">Small Table</button>
+    <button class="tabbtn secondary" id="btn-big" aria-pressed="false">Big Table</button>
   </div>
 
-  <!-- Desno: guest = Login/Registracija, logged = Logout -->
+  <!-- Right: guest = Login/Register, logged = Logout -->
   <div class="top-right" id="top-right">
     <button class="btn-ghost" id="btn-login">Login</button>
-    <button class="btn-ghost" id="btn-register">Registracija</button>
+    <button class="btn-ghost" id="btn-register">Register</button>
     <button class="btn-ghost hidden" id="btn-logout">Logout</button>
   </div>
 </div>
@@ -52,14 +53,14 @@
 <!-- =============== STAGE / TABLE =============== -->
 <div class="wrap" id="wrap">
   <div id="stage">
-    <div id="table"></div>
+    <div id="table" role="img" aria-label="Poker table background"></div>
 
-    <!-- POT i STATUS -->
-    <div id="pot">POT: 0</div>
-    <div id="status">Čeka se igrači…</div>
+    <!-- POT & STATUS -->
+    <div id="pot" aria-live="polite">POT: 0</div>
+    <div id="status" aria-live="polite">Waiting for players…</div>
 
-    <!-- BOARD karte -->
-    <div id="board">
+    <!-- BOARD cards -->
+    <div id="board" aria-label="Community cards">
       <div class="card back"></div>
       <div class="card back"></div>
       <div class="card back"></div>
@@ -67,10 +68,8 @@
       <div class="card back"></div>
     </div>
 
-    <!-- SEATS (0..8) → CSS ih raspoređuje elipsom, ti si 8 (dole) -->
-    <div id="seats">
-      <!-- Dinamički popunjavamo iz JS-a -->
-    </div>
+    <!-- SEATS (0..8) – CSS positions them on ellipse; you are 8 (bottom) -->
+    <div id="seats"></div>
   </div>
 </div>
 
@@ -80,8 +79,8 @@
     <h3 style="margin:0 0 10px 0">Login</h3>
     <div class="col">
       <label>Nickname</label>
-      <input id="login-nick" type="text" placeholder="tvoj_nick" />
-      <label>Lozinka</label>
+      <input id="login-nick" type="text" placeholder="your_nick" />
+      <label>Password</label>
       <input id="login-pass" type="password" placeholder="••••••" />
       <button class="btn primary" id="do-login">Login</button>
     </div>
@@ -91,15 +90,15 @@
 <!-- ================ REGISTER MODAL ================ -->
 <div class="modal-backdrop hidden" id="register-modal">
   <div class="modal">
-    <h3 style="margin:0 0 10px 0">Registracija</h3>
+    <h3 style="margin:0 0 10px 0">Register</h3>
     <div class="col">
       <label>Email</label>
       <input id="reg-email" type="email" placeholder="you@mail.com" />
       <label>Nickname</label>
-      <input id="reg-nick" type="text" placeholder="tvoj_nick" />
-      <label>Lozinka</label>
+      <input id="reg-nick" type="text" placeholder="your_nick" />
+      <label>Password</label>
       <input id="reg-pass" type="password" placeholder="••••••" />
-      <button class="btn primary" id="do-register">Registracija</button>
+      <button class="btn primary" id="do-register">Create Account</button>
     </div>
   </div>
 </div>
@@ -119,8 +118,10 @@
   const state = {
     logged: false,
     me: { nick: '', chips: 0, avatar: '/avatar_1.png' },
-    table: { kind: 'small', sb: 0.2, bb: 0.5 }, // default – Mali sto
+    table: { kind: 'small', sb: 0.2, bb: 0.5 }, // default – Small table
     seated: false,
+    myTurn: false,
+    betToCall: 0,
   };
 
   // ---------------------- AUTH UI ----------------------
@@ -148,7 +149,7 @@
     if(state.logged){
       show(ui.topLeft); show(ui.topCenter); hide(ui.btnLogin); hide(ui.btnRegister); show(ui.btnLogout);
       ui.avatar.src = state.me.avatar; ui.nick.textContent = state.me.nick || 'Player'; ui.balance.textContent = String(state.me.chips|0);
-      // Po ulasku u lobby uvijek Mali sto
+      // Entering lobby defaults to Small table
       setTable('small');
     } else {
       hide(ui.topLeft); hide(ui.topCenter); show(ui.btnLogin); show(ui.btnRegister); hide(ui.btnLogout);
@@ -158,12 +159,12 @@
 
   // ---------------------- TABLE SWITCH ----------------------
   function setTable(kind){
-    if(kind==='small'){ state.table = { kind:'small', sb:0.2, bb:0.5 }; ui.btnSmall.classList.add('active'); ui.btnBig.classList.remove('active'); }
-    else { state.table = { kind:'big', sb:1, bb:2 }; ui.btnBig.classList.add('active'); ui.btnSmall.classList.remove('active'); }
-    // Pozadina stola (isti PNG, samo informativno mijenjamo status)
+    if(kind==='small'){ state.table = { kind:'small', sb:0.2, bb:0.5 }; ui.btnSmall.classList.add('active'); ui.btnBig.classList.remove('active'); ui.btnSmall.setAttribute('aria-pressed','true'); ui.btnBig.setAttribute('aria-pressed','false'); }
+    else { state.table = { kind:'big', sb:1, bb:2 }; ui.btnBig.classList.add('active'); ui.btnSmall.classList.remove('active'); ui.btnBig.setAttribute('aria-pressed','true'); ui.btnSmall.setAttribute('aria-pressed','false'); }
+    // Same PNG for both
     ui.table.style.background = "url('/poker_table.png') center/contain no-repeat";
-    ui.status.textContent = `Stol: ${state.table.kind==='small'?'Mali (0.2/0.5)':'Veliki (1/2)'} — Buy-in: 50–200 BB`;
-    // Reset inline buyin mjehurića ako je bio otvoren
+    ui.status.textContent = `Table: ${state.table.kind==='small'?'Small (0.2/0.5)':'Big (1/2)'} — Buy-in: 50–200 BB`;
+    // Reset inline buy-in bubbles if any
     $$('.buyin-pop', ui.seats).forEach(n=>n.remove());
   }
 
@@ -175,7 +176,6 @@
     const div = document.createElement('div');
     div.className = 'seat';
     div.dataset.i = String(i);
-    // sadržaj se puni kasnije (free ili occupied)
     return div;
   }
 
@@ -183,8 +183,7 @@
     ui.seats.innerHTML='';
     for(let i=0;i<9;i++){
       const s = seatTemplate(i);
-      // Je li to moje mjesto?
-      const isMe = state.seated && i===8; // ti si uvijek dole vizualno
+      const isMe = state.seated && i===8; // you are always bottom visually
       if(isMe){
         s.classList.add('me');
         // avatar
@@ -192,22 +191,28 @@
         // nick & stack
         const nk = document.createElement('div'); nk.className='nick'; nk.textContent=state.me.nick; s.appendChild(nk);
         const st = document.createElement('div'); st.className='stack'; st.textContent=String(state.me.chips|0); s.appendChild(st);
-        // moje karte
+        // my hole cards (start hidden/back for everyone else visually)
         const cards = document.createElement('div'); cards.className='cards';
         const c1 = document.createElement('div'); c1.className='card back';
         const c2 = document.createElement('div'); c2.className='card back';
         cards.appendChild(c1); cards.appendChild(c2); s.appendChild(cards);
-        // kontrole (jedan red: FULD | CHEK/COLL | INPUT | REIS)
+        // controls in one row: FOLD | CHECK/CALL | INPUT | RAISE
         const ctl = document.createElement('div'); ctl.className='controls';
-        const bFold = document.createElement('button'); bFold.className='btn'; bFold.textContent='FULD';
-        const bCall = document.createElement('button'); bCall.className='btn'; bCall.id='btn-call'; bCall.textContent='CHECK';
-        const inp = document.createElement('input'); inp.type='number'; inp.id='raise-amt'; inp.placeholder='iznos'; inp.min='0';
-        const bRaise = document.createElement('button'); bRaise.className='btn primary'; bRaise.textContent='REIS';
+        const bFold = document.createElement('button'); bFold.className='btn'; bFold.textContent='FOLD';
+        const bCall = document.createElement('button'); bCall.className='btn'; bCall.id='btn-call'; bCall.textContent= state.betToCall>0 ? 'CALL' : 'CHECK';
+        const inp = document.createElement('input'); inp.type='number'; inp.id='raise-amt'; inp.placeholder='amount'; inp.min='0'; inp.inputMode='decimal';
+        const bRaise = document.createElement('button'); bRaise.className='btn primary'; bRaise.textContent='RAISE';
         ctl.appendChild(bFold); ctl.appendChild(bCall); ctl.appendChild(inp); ctl.appendChild(bRaise); s.appendChild(ctl);
+        // enable/disable by turn
+        const setTurnUI = ()=>{
+          const active = !!state.myTurn;
+          [bFold,bCall,bRaise,inp].forEach(n=> n.classList.toggle('disabled', !active));
+        };
+        setTurnUI();
       } else {
-        // prazno sjedalo → SLOBODNO
-        const btn = document.createElement('button'); btn.className='free'; btn.textContent='SLOBODNO';
-        btn.addEventListener('click', (e)=> onClickFree(s));
+        // free seat → SLOBODNO (FREE)
+        const btn = document.createElement('button'); btn.className='free'; btn.textContent='FREE';
+        btn.addEventListener('click', ()=> onClickFree(s));
         s.appendChild(btn);
       }
       ui.seats.appendChild(s);
@@ -215,55 +220,55 @@
   }
 
   function onClickFree(seatEl){
-    if(!state.logged){ toast('Prijavi se da sjedneš.'); return; }
-    // inline buy-in mjehurić (50–200 BB), preračun u chip (KM)
+    if(!state.logged){ toast('Login to sit.'); return; }
+    // inline buy-in bubble (50–200 BB), converted to chips (KM)
     const old = seatEl.querySelector('.buyin-pop'); if(old) old.remove();
-    const min = Math.round(50 * state.table.bb); // u chip
+    const min = Math.round(50 * state.table.bb); // in chips (KM)
     const max = Math.round(200 * state.table.bb);
     const pop = document.createElement('div'); pop.className='buyin-pop';
     const inp = document.createElement('input'); inp.type='number'; inp.min=String(min); inp.max=String(max); inp.placeholder=`${min}–${max}`; inp.value=String(Math.min(max, Math.max(min, Math.floor(state.me.chips))));
-    const go = document.createElement('button'); go.className='btn primary'; go.textContent='Uđi';
+    const go = document.createElement('button'); go.className='btn primary'; go.textContent='Sit';
     pop.appendChild(inp); pop.appendChild(go); seatEl.appendChild(pop);
     go.addEventListener('click', ()=>{
       const v = Number(inp.value||0);
       if(v<min || v>max){ toast(`Buy-in ${min}–${max}`); return; }
-      if(state.me.chips < v){ toast('Nedovoljno chipova.'); return; }
-      // oduzmi sa balansa i sjedni – vizualno si uvijek seat 8
+      if(state.me.chips < v){ toast('Not enough chips.'); return; }
+      // remove from balance and sit – you are always seat 8 visually
       state.me.chips -= v; state.seated = true; applyAuthUI(); renderSeats();
-      toast(`Ušao si za stol sa ${v}.`);
+      toast(`You sat with ${v}.`);
     });
   }
 
   // ---------------------- AUTH HANDLERS ----------------------
   ui.btnLogin.addEventListener('click', ()=> show(ui.loginModal));
   ui.btnRegister.addEventListener('click', ()=> show(ui.registerModal));
-  ui.btnLogout.addEventListener('click', ()=>{ state.logged=false; state.seated=false; applyAuthUI(); toast('Odjavljen.'); });
+  ui.btnLogout.addEventListener('click', ()=>{ state.logged=false; state.seated=false; applyAuthUI(); toast('Logged out.'); });
 
   $('#do-login').addEventListener('click', ()=>{
     const n = $('#login-nick').value.trim();
     const p = $('#login-pass').value.trim();
-    if(!n || !p){ toast('Unesi nick i lozinku.'); return; }
-    state.logged=true; state.me.nick=n; // demo: zadrži trenutne chipove
-    hide(ui.loginModal); applyAuthUI(); renderSeats(); toast('Dobrodošao!');
+    if(!n || !p){ toast('Enter nickname and password.'); return; }
+    state.logged=true; state.me.nick=n; // demo: keep current chips
+    hide(ui.loginModal); applyAuthUI(); renderSeats(); toast('Welcome!');
   });
 
   $('#do-register').addEventListener('click', ()=>{
     const e = $('#reg-email').value.trim();
     const n = $('#reg-nick').value.trim();
     const p = $('#reg-pass').value.trim();
-    if(!e || !n || !p){ toast('Popuni sva polja.'); return; }
-    state.logged=true; state.me.nick=n; state.me.chips = 0; // start bez chipova (admin će dodati)
-    hide(ui.registerModal); applyAuthUI(); renderSeats(); toast('Registriran.');
+    if(!e || !n || !p){ toast('Fill all fields.'); return; }
+    state.logged=true; state.me.nick=n; state.me.chips = 0; // start with 0; admin will add chips
+    hide(ui.registerModal); applyAuthUI(); renderSeats(); toast('Account created.');
   });
 
-  // Klik izvan modala zatvara
+  // close modals by clicking the backdrop
   [ui.loginModal, ui.registerModal].forEach(w=>{
     w.addEventListener('click', (ev)=>{ if(ev.target===w) hide(w); });
   });
 
-  // Demo: dodaj malo chipova tipkom "c" (samo frontend test)
+  // Demo: add chips with key "c" (frontend only)
   document.addEventListener('keydown', (e)=>{
-    if(e.key==='c'){ state.me.chips += 100; ui.balance.textContent=String(state.me.chips); toast('+100 chip (demo)'); }
+    if(e.key==='c'){ state.me.chips += 100; ui.balance.textContent=String(state.me.chips); toast('+100 chips (demo)'); }
   });
 
   // INIT
