@@ -1,19 +1,48 @@
 // ===== /public/table.js =====
-// Prikaz stola + akcije + WS refresh
+// Prikaz stola + JOIN + TOP-UP + akcije + WS refresh (samo STO)
 (()=>{
   const $ = (s, r=document)=>r.querySelector(s);
 
   const params = new URLSearchParams(location.search);
   const TABLE_ID = parseInt(params.get("id")||"0",10);
 
-  const elBoard = $("#board");
-  const elPot = $("#pot");
-  const elStatus = $("#status");
+  const elBoard   = $("#board");
+  const elPot     = $("#pot");
+  const elStatus  = $("#status");
   const elActions = $("#actions");
-  const elBetBox = $("#bet-box");
-  const elBetAmount = $("#bet-amount");
+  const elBetBox  = $("#bet-box");
+  const elBetAmt  = $("#bet-amount");
+
+  const topbar    = $("#topbar");
+  const infoPill  = $("#info-pill");
+  const btnOpenJoin  = $("#btn-open-join");
+  const btnOpenTopup = $("#btn-open-topup");
+  const btnLeave     = $("#btn-leave");
+
+  // JOIN modal
+  const joinBox   = $("#join-box");
+  const joinId    = $("#join-id");
+  const joinSeat  = $("#join-seat");
+  const joinBuy   = $("#join-buy");
+  const joinRange = $("#join-range");
+  const joinMsg   = $("#join-msg");
+  const btnJoinOk = $("#btn-join-confirm");
+  const btnJoinClose = $("#btn-close-join");
+
+  // TOPUP modal
+  const topupBox   = $("#topup-box");
+  const topupHint  = $("#topup-hint");
+  const topupAmt   = $("#topup-amount");
+  const topupMsg   = $("#topup-msg");
+  const btnTopupOk = $("#btn-topup-confirm");
+  const btnTopupClose = $("#btn-close-topup");
 
   let WS=null, STATE=null;
+
+  function seatEl(i){ return document.querySelector(`.seat[data-i="${i}"]`); }
+  function hideExtraSeats(n){
+    for(let i=0;i<9;i++){ const e=seatEl(i); if(!e) continue; e.style.display = i<n ? "flex":"none"; }
+  }
 
   function setCard(el, code){
     el.className="card";
@@ -35,11 +64,6 @@
       setCard(d, arr[i]||"??");
       elBoard.appendChild(d);
     }
-  }
-
-  function seatEl(i){ return document.querySelector(`.seat[data-i="${i}"]`); }
-  function hideExtraSeats(n){
-    for(let i=0;i<9;i++){ const e=seatEl(i); if(!e) continue; e.style.display = i<n ? "flex":"none"; }
   }
 
   function badgeImg(src, cls){
@@ -71,15 +95,22 @@
     elActions.classList.toggle("hidden", !myTurn);
     elBetBox.classList.add("hidden");
 
-    // status
-    elStatus.textContent = `${st.street.toUpperCase()} • SB:${st.table.sb} BB:${st.table.bb}` +
-      (myTurn ? ` • Na potezu si (call ${st.call_amt||0})` : "");
+    // status/topbar info
+    const txt = `${st.street.toUpperCase()} • SB:${st.table.sb} BB:${st.table.bb}`;
+    elStatus.textContent = txt + (myTurn ? ` • Na potezu si (call ${st.call_amt||0})` : "");
+    infoPill.textContent = txt;
 
     // pripremi bet box granice
     if(myTurn){
-      elBetAmount.value = st.min_bet||st.table.bb;
-      elBetAmount.min = st.min_bet||st.table.bb;
+      elBetAmt.value = st.min_bet||st.table.bb;
+      elBetAmt.min = st.min_bet||st.table.bb;
     }
+
+    // topbar prikaz dugmadi
+    topbar.classList.remove("hidden");
+    btnOpenJoin.classList.toggle("hidden", st.me_seat>=0);  // Join dugme samo ako nisi sjeo
+    btnOpenTopup.classList.toggle("hidden", st.me_seat<0);  // Top-up samo ako sjediš
+    btnLeave.classList.toggle("hidden", st.me_seat<0);
   }
 
   function render(st){
@@ -88,12 +119,10 @@
     elPot.textContent = st.pot ? ("Pot: "+st.pot) : "—";
     renderActions(st);
 
-    // moje hole karte (ako si sjeo) — prikaži na mjestu mog seat-a preko avatara (tooltip)
+    // moje hole karte (tooltip)
     if(st.my_hole){
       const me = seatEl(st.me_seat);
-      if(me){
-        me.title = "Tvoje karte: " + (st.my_hole.join(" "));
-      }
+      if(me){ me.title = "Tvoje karte: " + (st.my_hole.join(" ")); }
     }
   }
 
@@ -103,20 +132,87 @@
     STATE=r; render(STATE);
   }
 
-  // actions
+  // --- ACTIONS (TURN) ---
   async function doAction(a, amount){
     const body={ table_id: TABLE_ID, action:a };
     if(typeof amount==="number") body.amount=amount|0;
     const r = await fetch("/api/table/action",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify(body)}).then(x=>x.json()).catch(()=>null);
-    if(!r?.ok) return;
+    if(!r?.ok){ return; }
     await fetchState();
   }
-  window.sendFold = ()=>doAction("fold");
-  window.sendCheck = ()=>doAction("check");
-  window.sendCall = ()=>doAction("call");
-  window.openBet = ()=>{ elBetBox.classList.remove("hidden"); elBetAmount.focus(); };
-  window.sendBet = ()=>{ const v=parseInt(elBetAmount.value||"0",10); if(!v) return; doAction("bet",v); };
+  $("#btn-fold").onclick = ()=>doAction("fold");
+  $("#btn-check").onclick= ()=>doAction("check");
+  $("#btn-call").onclick = ()=>doAction("call");
+  $("#btn-open-bet").onclick= ()=>{ elBetBox.classList.remove("hidden"); elBetAmt.focus(); };
+  $("#btn-send-bet").onclick = ()=>{ const v=parseInt(elBetAmt.value||"0",10); if(!v) return; doAction("bet",v); };
 
+  // --- JOIN (sa table stranice) ---
+  function openJoin(){
+    if(!STATE) return;
+    joinId.textContent = STATE.table.id;
+    joinSeat.innerHTML = "";
+    // napuni seats listu (sve pozicije, pa UI odluči)
+    for(let i=0;i<STATE.table.seats;i++) joinSeat.innerHTML+=`<option value="${i}">Seat ${i+1}</option>`;
+    // raspon
+    const min = STATE.table.bb*50, max = STATE.table.bb*200;
+    joinRange.textContent = `Buy-in: ${min} – ${max}`;
+    joinBuy.value = min;
+    joinBox.style.display="flex";
+    joinMsg.textContent="";
+  }
+  btnOpenJoin.onclick = openJoin;
+  $("#btn-close-join").onclick = ()=>{ joinBox.style.display="none"; };
+
+  $("#btn-join-confirm").onclick = async ()=>{
+    const seat_index = parseInt(joinSeat.value||"0",10);
+    const buyin = parseInt(joinBuy.value||"0",10);
+    const r = await fetch("/api/table/join",{
+      method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",
+      body:JSON.stringify({ table_id: TABLE_ID, seat_index, buyin })
+    }).then(x=>x.json()).catch(()=>null);
+    if(!r?.ok){ joinMsg.textContent = r?.error||"Greška"; return; }
+    joinBox.style.display="none";
+    await fetchState();
+  };
+
+  // --- TOP-UP ---
+  function openTopup(){
+    if(!STATE) return;
+    const maxTotal = STATE.table.bb*200;
+    const me = STATE.seats.find(x=>x.seat_index===STATE.me_seat);
+    const current = me ? (me.stack|0) : 0;
+    const canAdd = Math.max(0, maxTotal - current);
+    topupHint.textContent = `Max ukupni stack: ${maxTotal} • Trenutno: ${current} • Možeš dodati do: ${canAdd}`;
+    topupAmt.value = Math.min(STATE.table.bb, canAdd);
+    topupAmt.max = canAdd;
+    topupBox.style.display="flex";
+    topupMsg.textContent="";
+  }
+  btnOpenTopup.onclick = openTopup;
+  btnTopupClose.onclick = ()=>{ topupBox.style.display="none"; };
+
+  btnTopupOk.onclick = async ()=>{
+    const amount = parseInt(topupAmt.value||"0",10);
+    if(!amount || amount<=0){ topupMsg.textContent="Unesi iznos > 0"; return; }
+    const r = await fetch("/api/table/topup",{
+      method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",
+      body:JSON.stringify({ table_id: TABLE_ID, amount })
+    }).then(x=>x.json()).catch(()=>null);
+    if(!r?.ok){ topupMsg.textContent = r?.error||"Top-up nije podržan na serveru."; return; }
+    topupBox.style.display="none";
+    await fetchState();
+  };
+
+  // --- LEAVE (opcionalno, postojeća ruta) ---
+  btnLeave.onclick = async ()=>{
+    const r = await fetch("/api/table/leave",{
+      method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",
+      body:JSON.stringify({ table_id: TABLE_ID })
+    }).then(x=>x.json()).catch(()=>null);
+    if(r?.ok){ await fetchState(); }
+  };
+
+  // --- WS ---
   function connectWS(){
     try{
       const ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host);
