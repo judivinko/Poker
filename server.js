@@ -54,11 +54,12 @@ CREATE TABLE IF NOT EXISTS game_state (
 `);
 
 const app = express();
+app.set("trust proxy", 1); // ✅ bitno za HTTPS detekciju iza Render proxyja
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));
 
-// --- Aliasi za nazive slika (radi razmaka u card_ bach.png) ---
+// --- Aliasi za nazive slika (ostavljeno točno kako imaš) ---
 app.get("/card_back.png",(req,res)=>{
   const p = path.join(__dirname,"public","card_ bach.png");
   if(fs.existsSync(p)) return res.sendFile(p);
@@ -182,7 +183,7 @@ function initHand(table){
 
   // acting red preflop: next nakon BB
   const afterBB = order[(order.indexOf(g.bb_i)+1)%order.length];
-  g.toAct = order.slice(order.indexOf(afterBB)).concat(order.slice(0,order.indexOf(afterBB)));
+  g.toAct = order.slice(order.indexOf(afterBB)).concat(order.slice(0,order.indexOf(afterBB)]);
   g.yetToAct = new Set(g.toAct);
 
   // persist osnovnog GS
@@ -375,10 +376,18 @@ app.post("/api/login",(req,res)=>{
   if(!u) return res.json({ ok:false,error:"bad" });
   if(!bcrypt.compareSync(password||"",u.pass)) return res.json({ ok:false,error:"bad" });
   if(u.disabled) return res.json({ ok:false,error:"banned" });
-  res.cookie("uid",u.id,{ httpOnly:false, sameSite:"lax" });
+
+  // ✅ cookie je secure samo kad smo stvarno na HTTPS (mobilni to traži)
+  const secure = req.secure || (req.headers["x-forwarded-proto"] === "https");
+  res.cookie("uid",u.id,{ httpOnly:false, sameSite:"lax", secure, path:"/" });
+
   res.json({ ok:true });
 });
-app.get("/api/logout",(req,res)=>{ res.clearCookie("uid"); res.json({ ok:true }); });
+app.get("/api/logout",(req,res)=>{
+  const secure = req.secure || (req.headers["x-forwarded-proto"] === "https");
+  res.clearCookie("uid",{ sameSite:"lax", secure, path:"/" });
+  res.json({ ok:true });
+});
 app.get("/api/me",(req,res)=>{
   const u=currentUser(req);
   if(!u) return res.json({ ok:false });
