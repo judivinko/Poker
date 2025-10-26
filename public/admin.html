@@ -8,7 +8,7 @@
 <style>
   :root{ --bg:#0b0d13; --panel:#111722; --muted:#94a3b8; --br:#243041; --btn:#22d3ee; }
   body{ margin:0; background:var(--bg); color:#e5e7eb; font:14px/1.4 system-ui,Segoe UI,Roboto,Arial,sans-serif; }
-  .wrap{ max-width:900px; margin:0 auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
+  .wrap{ max-width:980px; margin:0 auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
   .card{ background:var(--panel); border:1px solid var(--br); border-radius:12px; padding:14px; }
   .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .col{ display:flex; flex-direction:column; gap:8px; }
@@ -27,21 +27,15 @@
 </style>
 </head>
 <body>
-
 <div class="wrap">
-
   <h1 style="text-align:center;margin:6px 0 4px;">ADMIN PANEL</h1>
 
-  <!-- AUTH -->
-  <section class="card">
-    <div class="row">
-      <input id="adminkey" class="grow" type="password" placeholder="x-admin-key">
-      <button id="btn-set">Set</button>
-      <span id="msg" class="muted"></span>
-    </div>
-  </section>
+  <section class="card"><div class="row">
+    <input id="adminkey" class="grow" type="password" placeholder="x-admin-key">
+    <button id="btn-set">Set</button>
+    <span id="msg" class="muted"></span>
+  </div></section>
 
-  <!-- TOOLS -->
   <section class="card">
     <div class="toolbar">
       <div class="row grow">
@@ -57,7 +51,6 @@
     </div>
   </section>
 
-  <!-- MASS ACTIONS -->
   <section class="card">
     <div class="row">
       <input id="email" class="grow" type="email" placeholder="email korisnika">
@@ -69,7 +62,6 @@
     <div id="op-msg" class="muted" style="margin-top:6px;"></div>
   </section>
 
-  <!-- USERS -->
   <section class="card">
     <div class="row" style="justify-content:space-between;">
       <div class="muted">Korisnici</div>
@@ -77,134 +69,89 @@
     </div>
     <div id="users" class="list" style="margin-top:10px;">—</div>
   </section>
-
 </div>
 
 <script>
 (function(){
   const $ = s => document.querySelector(s);
-  const $$ = s => Array.from(document.querySelectorAll(s));
+  let KEY="", USERS=[], SORT="id", ASC=false;
 
-  let KEY = "";
-  let USERS = [];
-  let SORT = "id"; // id | email | balance
-  let ASC = false;
-
-  function setMsg(t){ $("#msg").textContent = t||""; }
-  function setOp(t){ $("#op-msg").textContent = t||""; }
-
-  function fmtUser(u){
-    return `
-      <div class="left">
-        <img class="avatar" src="${u.avatar||'/avatar_1.png'}" alt="">
-        <div>
-          <div style="font-weight:800">${u.email}${u.disabled? ' <span class="pill" style="margin-left:6px;border-color:#b91c1c;color:#fca5a5">DISABLED</span>':''}</div>
-          <div class="muted">ID: ${u.id}</div>
-        </div>
-      </div>
-      <div class="left">
-        <div class="pill">${u.balance|0} čipova</div>
-        <button class="secondary" data-mail="${u.email}">Select</button>
-      </div>
-    `;
-  }
+  function setMsg(t){ $("#msg").textContent=t||""; }
+  function setOp(t){ $("#op-msg").textContent=t||""; }
 
   function render(){
     let list = USERS.slice();
-
-    const q = $("#filter").value.trim().toLowerCase();
-    if (q) list = list.filter(u => (u.email||"").toLowerCase().includes(q));
-
+    const q=$("#filter").value.trim().toLowerCase();
+    if(q) list=list.filter(u=>(u.email||"").toLowerCase().includes(q));
     list.sort((a,b)=>{
-      if (SORT==="email"){
-        const A=(a.email||"").toLowerCase(), B=(b.email||"").toLowerCase();
-        return ASC ? A.localeCompare(B) : B.localeCompare(A);
-      }
-      if (SORT==="balance"){
-        return ASC ? (a.balance|0)-(b.balance|0) : (b.balance|0)-(a.balance|0);
-      }
-      // id
-      return ASC ? (a.id|0)-(b.id|0) : (b.id|0)-(a.id|0);
+      if(SORT==="email"){ const A=(a.email||"").toLowerCase(),B=(b.email||"").toLowerCase(); return ASC?A.localeCompare(B):B.localeCompare(A); }
+      if(SORT==="balance"){ return ASC?(a.balance|0)-(b.balance|0):(b.balance|0)-(a.balance|0); }
+      return ASC?(a.id|0)-(b.id|0):(b.id|0)-(a.id|0);
     });
-
-    const box = $("#users");
-    if (!list.length){ box.textContent = "Nema korisnika."; $("#count").textContent = "0"; return; }
-    box.innerHTML = "";
-    for (const u of list){
-      const item = document.createElement("div");
-      item.className = "item";
-      item.innerHTML = fmtUser(u);
-      item.querySelector("button.secondary").onclick = ()=>{
-        $("#email").value = u.email;
-        setOp("Korisnik odabran.");
-      };
-      box.appendChild(item);
+    const box=$("#users"); box.innerHTML="";
+    if(!list.length){ box.textContent="Nema korisnika."; $("#count").textContent="0"; return; }
+    for(const u of list){
+      const div=document.createElement("div");
+      div.className="item";
+      div.innerHTML=`
+        <div class="left">
+          <img class="avatar" src="${u.avatar||'/avatar_1.png'}">
+          <div>
+            <div style="font-weight:800">${u.email}${u.disabled? ' <span class="pill" style="margin-left:6px;border-color:#b91c1c;color:#fca5a5">DISABLED</span>':''}</div>
+            <div class="muted">ID: ${u.id}</div>
+          </div>
+        </div>
+        <div class="left">
+          <div class="pill">${u.balance|0} čipova</div>
+          <button class="secondary selectBtn">Select</button>
+        </div>`;
+      div.querySelector(".selectBtn").onclick=()=>{ $("#email").value=u.email; setOp("Korisnik odabran."); };
+      box.appendChild(div);
     }
-    $("#count").textContent = String(list.length);
+    $("#count").textContent=String(list.length);
   }
 
   async function loadUsers(){
-    if (!KEY){ setMsg("Unesi admin ključ."); return; }
+    if(!KEY){ setMsg("Unesi admin ključ."); return; }
     setMsg("Učitavanje…");
     try{
-      const r = await fetch("/api/admin/users",{ headers:{ "x-admin-key": KEY }});
-      if (!r.ok){ setMsg("Greška (HTTP)."); return; }
-      const j = await r.json();
-      if (!j.ok){ setMsg(j.error||"Greška"); return; }
-      USERS = j.users || [];
-      setMsg("OK");
-      render();
-    }catch(e){
-      setMsg("Greška konekcije.");
-    }
+      const r=await fetch("/api/admin/users",{headers:{"x-admin-key":KEY}});
+      if(!r.ok){ setMsg("HTTP greška."); return; }
+      const j=await r.json();
+      if(!j.ok){ setMsg(j.error||"Greška"); return; }
+      USERS=j.users||[]; setMsg("OK"); render();
+    }catch{ setMsg("Greška konekcije."); }
   }
-
   async function post(path, body){
-    const r = await fetch(path,{
-      method:"POST",
-      headers:{ "Content-Type":"application/json", "x-admin-key": KEY },
-      body: JSON.stringify(body||{})
-    }).then(r=>r.json()).catch(()=>null);
-    return r;
+    return await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","x-admin-key":KEY},body:JSON.stringify(body||{})})
+      .then(r=>r.json()).catch(()=>null);
   }
 
-  // Events
-  $("#btn-set").onclick = ()=>{ KEY = $("#adminkey").value.trim(); setMsg(KEY? "Admin ključ postavljen.":""); if(KEY) loadUsers(); };
-  $("#btn-reload").onclick = loadUsers;
-  $("#filter").oninput = render;
+  $("#btn-set").onclick=()=>{ KEY=$("#adminkey").value.trim(); setMsg(KEY?"Admin ključ postavljen.":""); if(KEY) loadUsers(); };
+  $("#btn-reload").onclick=loadUsers;
+  $("#filter").oninput=render;
+  $("#sort-email").onclick=()=>{ SORT="email"; ASC=!ASC; render(); };
+  $("#sort-balance").onclick=()=>{ SORT="balance"; ASC=!ASC; render(); };
+  $("#sort-id").onclick=()=>{ SORT="id"; ASC=!ASC; render(); };
 
-  $("#sort-email").onclick = ()=>{ SORT="email"; ASC=!ASC; render(); };
-  $("#sort-balance").onclick = ()=>{ SORT="balance"; ASC=!ASC; render(); };
-  $("#sort-id").onclick = ()=>{ SORT="id"; ASC=!ASC; render(); };
-
-  $("#btn-apply").onclick = async ()=>{
-    const email = $("#email").value.trim();
-    const amount = parseInt($("#amount").value||"0",10);
+  $("#btn-apply").onclick=async()=>{
+    const email=$("#email").value.trim();
+    const amount=parseInt($("#amount").value||"0",10);
     if(!email || !amount){ setOp("Unesi email i iznos."); return; }
-    const r = await post("/api/admin/chips",{ email, amount });
-    if (r?.ok){ setOp("Uspješno."); await loadUsers(); }
-    else setOp("Greška: "+(r?.error||""));
+    const r=await post("/api/admin/chips",{email,amount});
+    if(r?.ok){ setOp("Uspješno."); await loadUsers(); } else setOp("Greška: "+(r?.error||""));
+  };
+  $("#btn-disable").onclick=async()=>{
+    const email=$("#email").value.trim(); if(!email){ setOp("Unesi email."); return; }
+    const r=await post("/api/admin/disable",{email,flag:1}); if(r?.ok){ setOp("Korisnik DISABLED."); await loadUsers(); } else setOp("Greška.");
+  };
+  $("#btn-enable").onclick=async()=>{
+    const email=$("#email").value.trim(); if(!email){ setOp("Unesi email."); return; }
+    const r=await post("/api/admin/disable",{email,flag:0}); if(r?.ok){ setOp("Korisnik ENABLED."); await loadUsers(); } else setOp("Greška.");
   };
 
-  $("#btn-disable").onclick = async ()=>{
-    const email = $("#email").value.trim();
-    if(!email){ setOp("Unesi email."); return; }
-    const r = await post("/api/admin/disable",{ email, flag:1 });
-    if (r?.ok){ setOp("Korisnik DISABLED."); await loadUsers(); }
-    else setOp("Greška.");
-  };
-  $("#btn-enable").onclick = async ()=>{
-    const email = $("#email").value.trim();
-    if(!email){ setOp("Unesi email."); return; }
-    const r = await post("/api/admin/disable",{ email, flag:0 });
-    if (r?.ok){ setOp("Korisnik ENABLED."); await loadUsers(); }
-    else setOp("Greška.");
-  };
-
-  // Boot
   $("#adminkey").focus();
 })();
 </script>
-
 </body>
 </html>
