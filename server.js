@@ -1066,34 +1066,7 @@ function evaluateHand(hole, board) {
   if (trips.length) {
     const t = trips[0];
     const kickers = sortDesc(ranks.filter(r=>r!==t)).slice(0,2).map(r=>RVAL[r]);
-    return { arr:[4, RVAL[t], ...kickers], label:`Three of a Kind` };
-  }
+    return { arr:[4, RVAL[t], ...kickers], label:`
+  
 
-  // two pair
-  if (pairs.length >= 2) {
-    const [p1,p2] = pairs.slice(0,2);
-    const kicker = sortDesc(ranks.filter(r=>r!==p1 && r!==p2))[0];
-    return { arr:[3, RVAL[p1], RVAL[p2], RVAL[kicker],0,0], label:`Two Pair` };
-  }
 
-  // one pair
-  if (pairs.length === 1) {
-    const p = pairs[0];
-    const ks = sortDesc(ranks.filter(r=>r!==p)).slice(0,3).map(r=>RVAL[r]);
-    return { arr:[2, RVAL[p], ...ks], label:`Pair` };
-  }
-
-  // high card
-  const top = sortDesc(ranks).slice(0,5).map(r=>RVAL[r]);
-  return { arr:[1, ...top], label:`High Card` };
-}
-// ================== DIO 5 — HEALTH & START ==================
-
-// Render health
-app.get("/healthz", (_req, res) => res.status(200).send("ok"));
-app.get("/health",  (_req, res) => res.json({ ok:true, ts: Date.now() }));
-
-// START
-server.listen(PORT, HOST, () => {
-  console.log(`✅ Poker server running at http://${HOST}:${PORT}`);
-});
