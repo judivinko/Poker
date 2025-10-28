@@ -1,6 +1,6 @@
 // TEXAS HOLD'EM — FULL SERVER (Express + WS + better-sqlite3)
 // =============================================================
-// - 2 stola (small 0.2/0.5, big 1/2)
+// - 2 stola (small 0.
 // - Buy-in 50–200 BB
 // - No Limit Hold'em
 // - Time 30s + Timebank 90s (reset 1h)
